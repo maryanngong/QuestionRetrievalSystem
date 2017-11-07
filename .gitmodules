@@ -1,0 +1,3 @@
+[submodule "askubuntu"]
+	path = askubuntu
+	url = https://github.com/taolei87/askubuntu.git
