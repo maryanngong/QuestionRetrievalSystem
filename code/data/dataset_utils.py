@@ -4,6 +4,7 @@ import torch
 import cPickle as pickle
 import pandas as pd 
 import os
+import random
 
 
 def getEmbeddingTensor():
@@ -24,10 +25,69 @@ def getEmbeddingTensor():
     embedding_tensor = np.array(embedding_tensor, dtype=np.float32)
     return embedding_tensor, word_to_indx
 
+def getIndicesTensor(text_arr, word_to_indx, max_length=1000):
+    nil_indx = 0
+    text_indx = [ word_to_indx[x] if x in word_to_indx else nil_indx for x in text_arr][:max_length]
+    # if len(text_indx) < max_length:
+    #     text_indx.extend( [nil_indx for _ in range(max_length - len(text_indx))])
+
+    # x =  torch.LongTensor(text_indx)
+    x = text_indx
+
+    return x
+
+def map_corpus(raw_corpus, embedding_layer, max_len=100):
+    ids_corpus = { }
+    for id, pair in raw_corpus.iteritems():
+        item = (embedding_layer.map_to_ids(pair[0], filter_oov=True),
+                          embedding_layer.map_to_ids(pair[1], filter_oov=True)[:max_len])
+        #if len(item[0]) == 0:
+        #    say("empty title after mapping to IDs. Doc No.{}\n".format(id))
+        #    continue
+        ids_corpus[id] = item   
+    return ids_corpus
+
+
+# taken from paper github (add proper citation)
+def create_one_batch(titles, bodies, padding_id, pad_left):
+    max_title_len = max(1, max(len(x) for x in titles))
+    max_body_len = max(1, max(len(x) for x in bodies))
+    print max_title_len, max_body_len
+    if pad_left:
+        padded_titles = [ np.pad(x,(max_title_len-len(x),0),'constant',
+                                constant_values=padding_id) for x in titles]
+        padded_bodies = [ np.pad(x,(max_body_len-len(x),0),'constant',
+                                constant_values=padding_id) for x in bodies]
+        l = len(padded_titles[0])
+        print "len", l, np.shape(padded_titles[0])
+        for t in padded_titles:
+            if len(t) != l:
+                print "not the same", len(t)
+        return np.column_stack(padded_titles), np.column_stack(padded_bodies)
+    else:
+        padded_titles = [ np.pad(x,(0,max_title_len-len(x)),'constant',
+                                constant_values=padding_id) for x in titles]
+        padded_bodies = [ np.pad(x,(0,max_body_len-len(x)),'constant',
+                                constant_values=padding_id) for x in bodies]
+        print "type", type(padded_titles[0])
+        print padded_titles[0]
+        l = len(padded_titles[0])
+        print "len", l, np.shape(padded_titles[0])
+        for t in padded_titles:
+            if len(t) != l:
+                print "not the same", len(t)
+        return np.column_stack(padded_titles), np.column_stack(padded_bodies)
+    return titles, bodies
+
+def create_hinge_batch(triples):
+    max_len = max(len(x) for x in triples)
+    triples = np.vstack([ np.pad(x,(0,max_len-len(x)),'edge')
+                        for x in triples ]).astype('int32')
+    return triples
 
 # reads the file of all text query data
 # returns a pandas dataframe indexed by query id, with a column of title text tokens and a column of body text tokens
-def getTokenizedTextDataFrame():
+def getTokenizedTextDataFrame(word_to_indx):
     all_data_path='../../askubuntu/text_tokenized.txt.gz'
     lines = []
     with gzip.open(all_data_path) as file:
@@ -38,8 +98,8 @@ def getTokenizedTextDataFrame():
     for line in lines:
         query_id, title, body = line.split('\t')
         data_dict['id'].append(query_id)
-        data_dict['title'].append(title.split())
-        data_dict['body'].append(body.split())
+        data_dict['title'].append(getIndicesTensor(title.split(), word_to_indx))
+        data_dict['body'].append(getIndicesTensor(body.split(), word_to_indx))
     return pd.DataFrame(data=data_dict, index=data_dict['id'])     
 
 # reads the file of all train query ids and its simlar ids and negative ids
@@ -88,6 +148,7 @@ def load_dataset():
     print("\nLoading data...")
     embeddings, word_to_indx = getEmbeddingTensor()
     embedding_dim = embeddings.shape[1]
+    print "embedding_dim", embedding_dim
 
     # df_fname = "all_data.csv"
     # dev_fname = "dev_ids.csv"
@@ -100,7 +161,7 @@ def load_dataset():
     #     test = pd.read_csv(test_fname)
     #     dataframe = pd.read_csv(df_fname)
     # else:
-    dataframe = getTokenizedTextDataFrame()
+    dataframe = getTokenizedTextDataFrame(word_to_indx)
     train = getTrainingDataIds()
     dev = getDevTestDataIds('../../askubuntu/dev.txt')
     test = getDevTestDataIds('../../askubuntu/test.txt')
@@ -137,7 +198,7 @@ def load_dataset():
 #   - candidate_ids: list of negative query ids
 #   - BM25: list of bm25 scores of candidate queries
 class Dataset():
-    def __init__(self):
+    def __init__(self, batch_size=32):
         trainIds, devIds, testIds, allData, embeddings = load_dataset()
         self.allData = allData
         self.trainIds = trainIds
@@ -147,17 +208,24 @@ class Dataset():
         self.trainData = None
         self.devData = None
         self.testData = None
+        self.padding_id = -1 # get padding id from embeddings?
+        self.pad_left = False
+        self.batch_size = batch_size
+        self.get_train_data()
+        self.get_test_data()
+        self.get_dev_data()
 
     def get_embeddings(self):
         return self.embeddings
 
     def get_question_from_id(self, query_id):
         query = self.allData.loc[query_id]
-        return query['title'] + query['body']
+        return query['title'], query['body']
 
     def convertGroupings(self, query_group, data_type='train'):
-        query = self.get_question_from_id(query_group['id'])
-        query_group['query'] = query
+        title, body = self.get_question_from_id(query_group['id'])
+        query_group['title'] = title
+        query_group['body'] = body
         similars = []
         for sim_id in query_group['similar_ids']:
             # print "sim-id", sim_id
@@ -176,12 +244,107 @@ class Dataset():
             query_group['candidates'] = negatives
         return query_group
 
+    def get_train_batches(self, perm=None):
+        data = self.trainData
+        if perm is None:
+            perm = range(len(data))
+            # random.shuffle(perm)
+
+        N = len(data)
+        cnt = 0
+        id_to_index = {}
+        titles = [ ]
+        bodies = [ ]
+        triples = [ ]
+        batches = [ ]
+        for u in xrange(N):
+            i = perm[u]
+            pid = data.iloc[i]['id']
+            id_to_index[pid] = len(titles)
+            titles.append(data.iloc[i]['title'])
+            bodies.append(data.iloc[i]['body'])
+            positive_ids = data.iloc[i]['similar_ids']
+            negative_ids = data.iloc[i]['negative_ids']
+            positive_text_tokens = data.iloc[i]['similars']
+            negative_text_tokens = data.iloc[i]['negatives']
+            # qids = data.iloc[i]['candidate_ids'] qlabels = data.iloc[i]
+            # if pid not in ids_corpus: continue
+            cnt += 1
+            # print "positive_ids", type(positive_ids)
+            # print len(positive_ids)
+            for j,id in enumerate(positive_ids):# + negative_ids:
+                if id not in id_to_index:
+                    # if id not in ids_corpus: continue
+                    id_to_index[id] = len(titles)
+                    title = positive_text_tokens[0][j]
+                    body = positive_text_tokens[1][j]
+                    titles.append(title)
+                    bodies.append(body)
+
+            for j,id in enumerate(negative_ids):# + negative_ids:
+                if id not in id_to_index:
+                    # if id not in ids_corpus: continue
+                    id_to_index[id] = len(titles)
+                    title = negative_text_tokens[0][j]
+                    body = negative_text_tokens[1][j]
+                    titles.append(title)
+                    bodies.append(body)
+
+            p_index = id_to_index[pid]
+            positive_indices = [id_to_index[p] for p in positive_ids]
+            negative_indices = [id_to_index[p] for p in negative_ids]
+
+            # pid = pid2id[pid]
+            # pos = [ pid2id[q] for q, l in zip(qids, qlabels) if l == 1 and q in pid2id ]
+            # neg = [ pid2id[q] for q, l in zip(qids, qlabels) if l == 0 and q in pid2id ]
+            triples += [ [p_index, x] + negative_indices for x in positive_indices ]
+
+            padding_id = self.padding_id
+            pad_left = self.pad_left
+            if cnt == self.batch_size or u == N-1:
+                titles, bodies = create_one_batch(titles, bodies, padding_id, pad_left)
+                triples = create_hinge_batch(triples)
+                batches.append((titles, bodies, triples))
+                titles = [ ]
+                bodies = [ ]
+                triples = [ ]
+                pid2id = {}
+                cnt = 0
+        return batches
+
+    def create_eval_batches(self, data_set):
+        if data_set.contains("test"):
+            data = self.testData
+        else:
+            data = self.devData
+        padding_id = self.padding_id
+        pad_left = self.pad_left
+        lst = [ ]
+        for i in range(len(data)):
+            titles = [ ]
+            bodies = [ ]
+            pid = data.iloc[i]['id']
+            titles.append(data.iloc[i]['title'])
+            bodies.append(data.iloc[i]['body'])
+            positive_ids_set = set(data.iloc[i]['similar_ids'])
+            candidate_ids = data.iloc[i]['candidate_ids']
+            candidate_text_tokens = data.iloc[i]['candidates']
+            qlabels = [int(c_id in positive_ids_set) for c_id in candidate_ids]
+
+            for title, body in candidate_text_tokens:
+                titles.append(title)
+                bodies.append(body)
+
+            titles, bodies = create_one_batch(titles, bodies, padding_id, pad_left)
+            lst.append((titles, bodies, np.array(qlabels, dtype="int32")))
+        return lst
+
 
     def get_train_data(self):
-        train_data_file = "train_dataframe.csv"
-        if self.trainData or os.path.exists(train_data_file):
+        train_data_file = "train_embedded_dataframe.pkl"
+        if self.trainData is not None or os.path.exists(train_data_file):
             print "reading train data..."
-            train_df = pd.read_csv(train_data_file)
+            train_df = pd.read_pickle(train_data_file)
             self.trainData = train_df
             return self.trainData
 
@@ -191,15 +354,15 @@ class Dataset():
         negative_groups = []
         train_df = self.trainIds.groupby(['id']).apply(self.convertGroupings, 'train')
         # save it for later!
-        train_df.to_csv(train_data_file)
+        train_df.to_pickle(train_data_file)
         self.trainData = train_df
         return train_df
 
     def get_dev_data(self):
-        dev_data_file = "dev_dataframe.csv"
-        if self.devData or os.path.exists(dev_data_file):
+        dev_data_file = "dev_embedded_dataframe.pkl"
+        if self.devData is not None or os.path.exists(dev_data_file):
             print "reading dev data..."
-            dev_df = pd.read_csv(dev_data_file)
+            dev_df = pd.read_pickle(dev_data_file)
             self.devData = dev_df
             return self.devData
             
@@ -208,14 +371,14 @@ class Dataset():
         similar_groups = []
         negative_groups = []
         dev_df = self.devIds.groupby(['id']).apply(self.convertGroupings, 'dev')
-        dev_df.to_csv(dev_data_file)
+        dev_df.to_pickle(dev_data_file)
         self.devData = dev_df
         return dev_df
 
     def get_test_data(self):
-        test_data_file = "test_dataframe.csv"
-        if self.testData or os.path.exists(test_data_file):
-            test_df = pd.read_csv(test_data_file)
+        test_data_file = "test_embedded_dataframe.pkl"
+        if self.testData is not None or os.path.exists(test_data_file):
+            test_df = pd.read_pickle(test_data_file)
             self.testData = test_df
             return self.testData
             
@@ -224,7 +387,7 @@ class Dataset():
         similar_groups = []
         negative_groups = []
         test_df = self.testIds.groupby(['id']).apply(self.convertGroupings, 'test')
-        test_df.to_csv(test_data_file)
+        test_df.to_pickle(test_data_file)
         self.testData = test_df
         return test_df
 
@@ -234,13 +397,13 @@ if __name__ == '__main__':
     dev = dataset.get_dev_data()
     test = dataset.get_test_data()
     print "train.."
-    print train.head()
+    # print train.head()
     print ""
     print ""
     print "dev..."
-    # print dev.head()
+    print dev.head()
     print ""
     print ""
     print "test..."
-    # print test.head()
+    print test.head()
         
