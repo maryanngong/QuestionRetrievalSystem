@@ -48,9 +48,10 @@ def run_epoch(data, is_training, model, optimizer, args):
         if is_training:
             optimizer.zero_grad()
         # Encode all of the title and body text using model
-        ## ?? Need to process titles and bodies more?
-        out = model(titles, bodies)
-        # loss = Max_Margin_Loss(train_group_ids, out)
+        text_encodings = model(titles, bodies)
+        # Calculate Loss = Multi-Margin-Loss(train_group_ids, text_encodings)
+        scores, target_indices = cosine_differences(train_group_ids, text_encodings)
+        loss = F.multi_margin_loss(scores, target_indices)
         if is_training:
             loss.backward()
             optimizer.step()
