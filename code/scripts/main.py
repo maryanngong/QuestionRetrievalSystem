@@ -2,9 +2,9 @@ import argparse
 import sys
 from os.path import dirname, realpath
 sys.path.append(dirname(dirname(realpath(__file__))))
-import example_project.data.dataset_utils as data_utils
-import example_project.models.model_utils as model_utils
-import example_project.train.train_utils as train_utils
+import data.dataset_utils as data_utils
+import models.model_utils as model_utils
+import train.train_utils as train_utils
 import os
 import torch
 import datetime
@@ -41,7 +41,8 @@ if __name__ == '__main__':
     for attr, value in sorted(args.__dict__.items()):
         print("\t{}={}".format(attr.upper(), value))
 
-    train_data, dev_data, embeddings = data_utils.load_dataset(args)
+    train_data, dev_data, test_data, dataframe, embeddings = data_utils.load_dataset()
+    # print(dataframe)
 
     # model
     if args.snapshot is None:
