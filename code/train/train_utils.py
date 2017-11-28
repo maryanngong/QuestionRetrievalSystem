@@ -28,7 +28,7 @@ def train_model(train_data, dev_data, model, args):
         # Save model
         torch.save(model, args.save_path)
 
-def run_epoch(data, is_training, model, optimizer, args):
+def run_epoch(data_batches, is_training, model, optimizer, args):
     '''
     Train model for one pass of train data, and return loss, acccuracy
     '''
@@ -39,7 +39,7 @@ def run_epoch(data, is_training, model, optimizer, args):
         model.eval()
     N = len(data)
     for i in xrange(N):
-        t, b, g = train_batches[i]
+        t, b, g = data_batches[i]
         # Titles, Bodies are text samples (tokenized words are already converted to indices for embedding layer)
         # Train Group IDs are the IDs of data samples where each sample is (query, positive examples, negative examples)
         titles, bodies, train_group_ids = autograd.Variable(t), autograd.Variable(b), autograd.Variable(g)
