@@ -12,7 +12,7 @@ def batch_cosine_similarity(encoded, training_ids):
         negative_ids = minibatch_indices[2:]
         candidate_ids = minibatch_indices[1:]
 
-        enc_candidates = encoded[candidate_ids]
+        enc_candidates = torch.index_select(encoded, 0, torch.LongTensor(candidate_ids))
         similarity_scores = torch.from_numpy(cosine_similarity(enc_query, enc_candidates)).type(torch.FloatTensor) # shape should be (1, num_candidate_questions)
         all_scores.append(similarity_scores)
     return torch.stack(all_scores), torch.zeros(n).type(torch.LongTensor)
