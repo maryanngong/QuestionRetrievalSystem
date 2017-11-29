@@ -77,14 +77,14 @@ def create_one_batch(titles, bodies, padding_id, pad_left):
         padded_bodies = [ np.pad(x,(max_body_len-len(x),0),'constant',
                                 constant_values=padding_id) for x in bodies]
         l = len(padded_titles[0])
-        return np.stack(padded_titles), np.column_stack(padded_bodies)
+        return np.stack(padded_titles), np.stack(padded_bodies)
     else:
         padded_titles = [ np.pad(x,(0,max_title_len-len(x)),'constant',
                                 constant_values=padding_id) for x in titles]
         padded_bodies = [ np.pad(x,(0,max_body_len-len(x)),'constant',
                                 constant_values=padding_id) for x in bodies]
         l = len(padded_titles[0])
-        return np.stack(padded_titles), np.column_stack(padded_bodies)
+        return np.stack(padded_titles), np.stack(padded_bodies)
     return titles, bodies
 
 def create_hinge_batch(triples):
