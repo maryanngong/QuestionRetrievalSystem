@@ -2,7 +2,7 @@ import gzip
 import numpy as np
 import torch
 import cPickle as pickle
-import pandas as pd 
+import pandas as pd
 import os
 import random
 
@@ -44,7 +44,7 @@ def map_corpus(raw_corpus, embedding_layer, max_len=100):
         #if len(item[0]) == 0:
         #    say("empty title after mapping to IDs. Doc No.{}\n".format(id))
         #    continue
-        ids_corpus[id] = item   
+        ids_corpus[id] = item
     return ids_corpus
 
 
@@ -52,37 +52,26 @@ def map_corpus(raw_corpus, embedding_layer, max_len=100):
 def create_one_batch(titles, bodies, padding_id, pad_left):
     max_title_len = max(1, max(len(x) for x in titles))
     max_body_len = max(1, max(len(x) for x in bodies))
-    print max_title_len, max_body_len
     if pad_left:
         padded_titles = [ np.pad(x,(max_title_len-len(x),0),'constant',
                                 constant_values=padding_id) for x in titles]
         padded_bodies = [ np.pad(x,(max_body_len-len(x),0),'constant',
                                 constant_values=padding_id) for x in bodies]
         l = len(padded_titles[0])
-        print "len", l, np.shape(padded_titles[0])
-        for t in padded_titles:
-            if len(t) != l:
-                print "not the same", len(t)
-        return np.column_stack(padded_titles), np.column_stack(padded_bodies)
+        return np.stack(padded_titles), np.column_stack(padded_bodies)
     else:
         padded_titles = [ np.pad(x,(0,max_title_len-len(x)),'constant',
                                 constant_values=padding_id) for x in titles]
         padded_bodies = [ np.pad(x,(0,max_body_len-len(x)),'constant',
                                 constant_values=padding_id) for x in bodies]
-        print "type", type(padded_titles[0])
-        print padded_titles[0]
         l = len(padded_titles[0])
-        print "len", l, np.shape(padded_titles[0])
-        for t in padded_titles:
-            if len(t) != l:
-                print "not the same", len(t)
-        return np.column_stack(padded_titles), np.column_stack(padded_bodies)
+        return np.stack(padded_titles), np.column_stack(padded_bodies)
     return titles, bodies
 
 def create_hinge_batch(triples):
     max_len = max(len(x) for x in triples)
     triples = np.vstack([ np.pad(x,(0,max_len-len(x)),'edge')
-                        for x in triples ]).astype('int32')
+                        for x in triples ])
     return triples
 
 # reads the file of all text query data
@@ -100,7 +89,7 @@ def getTokenizedTextDataFrame(word_to_indx):
         data_dict['id'].append(query_id)
         data_dict['title'].append(getIndicesTensor(title.split(), word_to_indx))
         data_dict['body'].append(getIndicesTensor(body.split(), word_to_indx))
-    return pd.DataFrame(data=data_dict, index=data_dict['id'])     
+    return pd.DataFrame(data=data_dict, index=data_dict['id'])
 
 # reads the file of all train query ids and its simlar ids and negative ids
 # returns a pandas dataframe indexed by query id, with the columns
@@ -208,7 +197,7 @@ class Dataset():
         self.trainData = None
         self.devData = None
         self.testData = None
-        self.padding_id = -1 # get padding id from embeddings?
+        self.padding_id = 0 # get padding id from embeddings?
         self.pad_left = False
         self.batch_size = batch_size
         self.get_train_data()
@@ -240,7 +229,7 @@ class Dataset():
         else:
             negatives = []
             for neg_id in query_group['candidate_ids']:
-                negatives.append(self.get_question_from_id(neg_id))            
+                negatives.append(self.get_question_from_id(neg_id))
             query_group['candidates'] = negatives
         return query_group
 
@@ -313,7 +302,7 @@ class Dataset():
         return batches
 
     def create_eval_batches(self, data_set):
-        if data_set.contains("test"):
+        if "test" in data_set:
             data = self.testData
         else:
             data = self.devData
@@ -331,9 +320,7 @@ class Dataset():
             candidate_text_tokens = data.iloc[i]['candidates']
             qlabels = [int(c_id in positive_ids_set) for c_id in candidate_ids]
 
-            for title, body in candidate_text_tokens:
-                titles.append(title)
-                bodies.append(body)
+            titles, bodies = candidate_text_tokens
 
             titles, bodies = create_one_batch(titles, bodies, padding_id, pad_left)
             lst.append((titles, bodies, np.array(qlabels, dtype="int32")))
@@ -365,7 +352,7 @@ class Dataset():
             dev_df = pd.read_pickle(dev_data_file)
             self.devData = dev_df
             return self.devData
-            
+
         print "generating dev data..."
         queries = []
         similar_groups = []
@@ -381,7 +368,7 @@ class Dataset():
             test_df = pd.read_pickle(test_data_file)
             self.testData = test_df
             return self.testData
-            
+
         print "generating test data..."
         queries = []
         similar_groups = []
@@ -406,4 +393,3 @@ if __name__ == '__main__':
     print ""
     print "test..."
     print test.head()
-        

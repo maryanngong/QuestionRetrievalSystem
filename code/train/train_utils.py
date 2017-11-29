@@ -8,6 +8,7 @@ from tqdm import tqdm
 import datetime
 import pdb
 import numpy as np
+import score_utils as score_utils
 
 def train_model(train_data, dev_data, model, args):
     if args.cuda:
@@ -37,24 +38,41 @@ def run_epoch(data_batches, is_training, model, optimizer, args):
         model.train()
     else:
         model.eval()
-    N = len(data)
+    N = len(data_batches)
     for i in xrange(N):
         t, b, g = data_batches[i]
+        t, b, g = list(t), list(b), list(g)
+        print(t)
+        for i in range(len(t)):
+            # print(t[i])
+            t[i] = torch.LongTensor(t[i])
+        for i in range(len(b)):
+            b[i] = torch.LongTensor(b[i])
+        for i in range(len(g)):
+            g[i] = torch.LongTensor(g[i])
+        t, b, train_group_ids = torch.stack(t), torch.stack(b), torch.stack(g)
         # Titles, Bodies are text samples (tokenized words are already converted to indices for embedding layer)
         # Train Group IDs are the IDs of data samples where each sample is (query, positive examples, negative examples)
-        titles, bodies, train_group_ids = autograd.Variable(t), autograd.Variable(b), autograd.Variable(g)
+        titles, bodies = autograd.Variable(t), autograd.Variable(b)
         if args.cuda:
             titles, bodies, train_group_ids = titles.cuda(), bodies.cuda(), train_group_ids.cuda()
         if is_training:
             optimizer.zero_grad()
         # Encode all of the title and body text using model
-        text_encodings = model(titles, bodies)
+        text_encodings = model(titles) # add in bodies
         # Calculate Loss = Multi-Margin-Loss(train_group_ids, text_encodings)
-        scores, target_indices = cosine_differences(train_group_ids, text_encodings)
+        scores, target_indices = score_utils.batch_cosine_similarity(text_encodings, train_group_ids)
+        print('SHAPE SCORES:')
+        print(scores.shape)
+        print('SHAPE TARGET_INDICES:')
+        print(target_indices.shape)
+        # mml_loss = torch.nn.MultiMarginLoss()
         loss = F.multi_margin_loss(scores, target_indices)
         if is_training:
             loss.backward()
             optimizer.step()
         losses.append(loss.cpu().data[0])
+        print("BATCH LOSS: ")
+        print(loss.cpu().data[0])
     avg_loss = np.mean(losses)
     return avg_loss

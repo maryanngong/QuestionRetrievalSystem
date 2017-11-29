@@ -41,12 +41,11 @@ if __name__ == '__main__':
     for attr, value in sorted(args.__dict__.items()):
         print("\t{}={}".format(attr.upper(), value))
 
-    train_data, dev_data, test_data, dataframe, embeddings = data_utils.load_dataset()
-    # print(dataframe)
+    data = data_utils.Dataset()
 
     # model
     if args.snapshot is None:
-        model = model_utils.get_model(embeddings, args)
+        model = model_utils.get_model(data.get_embeddings(), args)
     else :
         print('\nLoading model from [%s]...' % args.snapshot)
         try:
@@ -58,4 +57,4 @@ if __name__ == '__main__':
     print()
     # train
     if args.train :
-        train_utils.train_model(train_data, dev_data, model, args)
+        train_utils.train_model(data.get_train_batches(), data.create_eval_batches('dev'), model, args)
