@@ -42,14 +42,15 @@ def run_epoch(data_batches, is_training, model, optimizer, args):
     for i in xrange(N):
         t, b, g = data_batches[i]
         t, b, g = list(t), list(b), list(g)
-        print(t)
-        for i in range(len(t)):
+        print("lengths!", len(t), len(b))
+        print("max index", max([max(k) for k in g]))
+        for j in range(len(t)):
             # print(t[i])
-            t[i] = torch.LongTensor(t[i])
-        for i in range(len(b)):
-            b[i] = torch.LongTensor(b[i])
-        for i in range(len(g)):
-            g[i] = torch.LongTensor(g[i])
+            t[j] = torch.LongTensor(t[j])
+        for j in range(len(b)):
+            b[j] = torch.LongTensor(b[j])
+        for j in range(len(g)):
+            g[j] = torch.LongTensor(g[j])
         t, b, train_group_ids = torch.stack(t), torch.stack(b), torch.stack(g)
         # Titles, Bodies are text samples (tokenized words are already converted to indices for embedding layer)
         # Train Group IDs are the IDs of data samples where each sample is (query, positive examples, negative examples)
@@ -63,9 +64,9 @@ def run_epoch(data_batches, is_training, model, optimizer, args):
         # Calculate Loss = Multi-Margin-Loss(train_group_ids, text_encodings)
         scores, target_indices = score_utils.batch_cosine_similarity(text_encodings, train_group_ids)
         print('SHAPE SCORES:')
-        print(scores.shape)
+        print(scores.data.shape)
         print('SHAPE TARGET_INDICES:')
-        print(target_indices.shape)
+        print(target_indices.data.shape)
         # mml_loss = torch.nn.MultiMarginLoss()
         loss = F.multi_margin_loss(scores, target_indices)
         if is_training:

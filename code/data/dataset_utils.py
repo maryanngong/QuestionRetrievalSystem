@@ -7,6 +7,25 @@ import os
 import random
 
 
+def read_train_batches_from_file():
+    batches_filename = "train_batches.pkl"
+    with open(batches_filename, 'rb') as f:
+        batches = pickle.load(f)
+        return batches
+
+def read_test_batches_from_file():
+    batches_filename = "test_batches.pkl"
+    with open(batches_filename, 'rb') as f:
+        batches = pickle.load(f)
+        return batches
+
+def read_dev_batches_from_file():
+    batches_filename = "dev_batches.pkl"
+    with open(batches_filename, 'rb') as f:
+        batches = pickle.load(f)
+        return batches        
+
+
 def getEmbeddingTensor():
     embedding_path='../../askubuntu/vector/vectors_pruned.200.txt.gz'
     lines = []
@@ -189,6 +208,9 @@ def load_dataset():
 class Dataset():
     def __init__(self, batch_size=32):
         trainIds, devIds, testIds, allData, embeddings = load_dataset()
+        self.train_batches_filename = "train_batches.pkl"
+        self.dev_batches_filename = "dev_batches.pkl"
+        self.test_batches_filename = "test_batches.pkl"
         self.allData = allData
         self.trainIds = trainIds
         self.devIds = devIds
@@ -200,6 +222,7 @@ class Dataset():
         self.padding_id = 0 # get padding id from embeddings?
         self.pad_left = False
         self.batch_size = batch_size
+
         self.get_train_data()
         self.get_test_data()
         self.get_dev_data()
@@ -234,6 +257,12 @@ class Dataset():
         return query_group
 
     def get_train_batches(self, perm=None):
+        batches_filename = self.train_batches_filename
+        # if os.path.exists(batches_filename):
+        #     print("reading train batches from file...")
+        #     with open(batches_filename, 'rb') as f:
+        #         batches = pickle.load(f)
+        #     return batches
         data = self.trainData
         if perm is None:
             perm = range(len(data))
@@ -249,9 +278,10 @@ class Dataset():
         for u in xrange(N):
             i = perm[u]
             pid = data.iloc[i]['id']
-            id_to_index[pid] = len(titles)
-            titles.append(data.iloc[i]['title'])
-            bodies.append(data.iloc[i]['body'])
+            if pid not in id_to_index:
+                id_to_index[pid] = len(titles)
+                titles.append(data.iloc[i]['title'])
+                bodies.append(data.iloc[i]['body'])
             positive_ids = data.iloc[i]['similar_ids']
             negative_ids = data.iloc[i]['negative_ids']
             positive_text_tokens = data.iloc[i]['similars']
@@ -291,6 +321,8 @@ class Dataset():
             padding_id = self.padding_id
             pad_left = self.pad_left
             if cnt == self.batch_size or u == N-1:
+                # assert len(titles) == len(bodies)
+                # assert max(id_to_index.values()) <= len(titles)
                 titles, bodies = create_one_batch(titles, bodies, padding_id, pad_left)
                 triples = create_hinge_batch(triples)
                 batches.append((titles, bodies, triples))
@@ -298,10 +330,23 @@ class Dataset():
                 bodies = [ ]
                 triples = [ ]
                 pid2id = {}
+                id_to_index = {}
                 cnt = 0
+        # with open(batches_filename, 'wb') as f:
+        #     print("pickle dumping train batches...")
+        #     pickle.dump(batches, f)
         return batches
 
     def create_eval_batches(self, data_set):
+        if "test" in data_set:
+            batches_filename = self.test_batches_filename
+        else:
+            batches_filename = self.dev_batches_filename
+        # if os.path.exists(batches_filename):
+        #     print("reading batches from file...")
+        #     with open(batches_filename, 'rb') as f:
+        #         batches = pickle.load(f)
+        #     return batches
         if "test" in data_set:
             data = self.testData
         else:
@@ -324,6 +369,8 @@ class Dataset():
 
             titles, bodies = create_one_batch(titles, bodies, padding_id, pad_left)
             lst.append((titles, bodies, np.array(qlabels, dtype="int32")))
+        # with open(batches_filename, 'wb') as f:
+        #     pickle.dump(lst, f)
         return lst
 
 
