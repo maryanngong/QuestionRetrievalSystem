@@ -73,7 +73,7 @@ def run_epoch(data_batches, is_training, model, optimizer, args):
             loss.backward()
             optimizer.step()
         losses.append(loss.cpu().data[0])
-        print("BATCH LOSS: ")
+        print("BATCH LOSS "+str(i)+" out of "+str(N)+": ")
         print(loss.cpu().data[0])
     avg_loss = np.mean(losses)
     return avg_loss
