@@ -57,4 +57,4 @@ if __name__ == '__main__':
     print()
     # train
     if args.train :
-        train_utils.train_model(data.get_train_batches(), data.create_eval_batches('dev'), model, args)
+        train_utils.train_model(data.get_train_batches(), data.get_dev_batches(), model, args)

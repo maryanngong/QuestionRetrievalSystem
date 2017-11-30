@@ -41,17 +41,18 @@ def run_epoch(data_batches, is_training, model, optimizer, args):
     N = len(data_batches)
     for i in xrange(N):
         t, b, g = data_batches[i]
-        t, b, g = list(t), list(b), list(g)
-        print("lengths!", len(t), len(b))
-        print("max index", max([max(k) for k in g]))
-        for j in range(len(t)):
-            # print(t[i])
-            t[j] = torch.LongTensor(t[j])
-        for j in range(len(b)):
-            b[j] = torch.LongTensor(b[j])
-        for j in range(len(g)):
-            g[j] = torch.LongTensor(g[j])
-        t, b, train_group_ids = torch.stack(t), torch.stack(b), torch.stack(g)
+        # t, b, g = list(t), list(b), list(g)
+        # print("lengths!", len(t), len(b))
+        # print("max index", max([max(k) for k in g]))
+        # for j in range(len(t)):
+        #     # print(t[i])
+        #     t[j] = torch.LongTensor(t[j])
+        # for j in range(len(b)):
+        #     b[j] = torch.LongTensor(b[j])
+        # for j in range(len(g)):
+        #     g[j] = torch.LongTensor(g[j])
+        # t, b, train_group_ids = torch.stack(t), torch.stack(b), torch.stack(g)
+        train_group_ids = g
         # Titles, Bodies are text samples (tokenized words are already converted to indices for embedding layer)
         # Train Group IDs are the IDs of data samples where each sample is (query, positive examples, negative examples)
         titles, bodies = autograd.Variable(t), autograd.Variable(b)
@@ -73,7 +74,7 @@ def run_epoch(data_batches, is_training, model, optimizer, args):
             loss.backward()
             optimizer.step()
         losses.append(loss.cpu().data[0])
-        print("BATCH LOSS "+str(i)+" out of "+str(N)+": ")
+        print("BATCH LOSS "+str(i+1)+" out of "+str(N)+": ")
         print(loss.cpu().data[0])
     avg_loss = np.mean(losses)
     return avg_loss
