@@ -373,6 +373,76 @@ class Dataset():
         #     pickle.dump(lst, f)
         return lst
 
+    def get_test_batches(self, perm=None):
+        batches_filename = self.test_batches_filename
+        # if os.path.exists(batches_filename):
+        #     print("reading train batches from file...")
+        #     with open(batches_filename, 'rb') as f:
+        #         batches = pickle.load(f)
+        #     return batches
+        data = self.testData
+        if perm is None:
+            perm = range(len(data))
+            # random.shuffle(perm)
+
+        N = len(data)
+        cnt = 0
+        id_to_index = {}
+        titles = [ ]
+        bodies = [ ]
+        triples = [ ]
+        batches = [ ]
+        for u in xrange(N):
+            i = perm[u]
+            pid = data.iloc[i]['id']
+            if pid not in id_to_index:
+                id_to_index[pid] = len(titles)
+                titles.append(data.iloc[i]['title'])
+                bodies.append(data.iloc[i]['body'])
+            positive_ids = data.iloc[i]['similar_ids']
+            positive_ids_set = set(positive_ids)
+            candidate_ids = data.iloc[i]['candidate_ids']
+            candidate_text_tokens = data.iloc[i]['candidates']
+            negative_ids = []
+
+            cnt += 1
+            # print "positive_ids", type(positive_ids)
+            # print len(positive_ids)
+            for j,id in enumerate(candidate_ids):# + negative_ids:
+                if id not in id_to_index:
+                    # if id not in ids_corpus: continue
+                    id_to_index[id] = len(titles)
+                    title = candidate_text_tokens[0][j]
+                    body = candidate_text_tokens[1][j]
+                    titles.append(title)
+                    bodies.append(body)
+
+                    if id not in positive_ids_set:
+                        negative_ids.append(id)
+
+
+            p_index = id_to_index[pid]
+            positive_indices = [id_to_index[p] for p in positive_ids]
+            negative_indices = [id_to_index[p] for p in negative_ids]
+
+            triples += [ [p_index, x] + negative_indices for x in positive_indices ]
+
+            padding_id = self.padding_id
+            pad_left = self.pad_left
+            if cnt == self.batch_size or u == N-1:
+                # assert len(titles) == len(bodies)
+                # assert max(id_to_index.values()) <= len(titles)
+                titles, bodies = create_one_batch(titles, bodies, padding_id, pad_left)
+                triples = create_hinge_batch(triples)
+                batches.append((titles, bodies, triples))
+                titles = [ ]
+                bodies = [ ]
+                triples = [ ]
+                pid2id = {}
+                id_to_index = {}
+                cnt = 0
+        return batches
+
     def get_dev_batches(self, perm=None):
         batches_filename = self.dev_batches_filename
         # if os.path.exists(batches_filename):
