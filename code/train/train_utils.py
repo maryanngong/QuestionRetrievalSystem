@@ -29,7 +29,7 @@ def train_model(train_data, dev_data, model, args):
         # Save model
         torch.save(model, args.save_path)
     # save final model
-    torch.save(model, args.save_path+)
+    torch.save(model, args.save_path+"_final")
 
 def run_epoch(data_batches, is_training, model, optimizer, args):
     '''

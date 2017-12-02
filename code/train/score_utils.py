@@ -18,8 +18,8 @@ def batch_cosine_similarity(encoded, training_ids):
         negative_ids = minibatch_indices[2:]
         candidate_ids = minibatch_indices[1:]
         # print("candidate_ids", candidate_ids)
-        print("max candidate_id", max(candidate_ids))
-        print("shape of encoded", encoded.data.shape)
+        # print("max candidate_id", max(candidate_ids))
+        # print("shape of encoded", encoded.data.shape)
 
         enc_candidates = encoded.index_select(0, autograd.Variable(torch.LongTensor(candidate_ids)))
         similarity_scores = F.cosine_similarity(enc_query.view(1,-1), enc_candidates)

@@ -60,10 +60,10 @@ class CNN(nn.Module):
         self.embedding_layer.weight.data = torch.from_numpy( embeddings )
 
         self.conv1 = nn.Conv2d(1, num_channels_out, kernel_sizes[0])
-        self.conv2 = nn.Conv2d(1, num_channels_out, kernel_sizes[1])
+        # self.conv2 = nn.Conv2d(1, num_channels_out, kernel_sizes[1])
         self.dropout = nn.Dropout(0.5)
         # the 2 refers to having 2 conv layers
-        self.fc1 = nn.Linear(2*num_channels_out, args.num_hidden)
+        self.fc1 = nn.Linear(1*num_channels_out, args.num_hidden)
 
     def conv_and_pool(self, x, conv, max_pool=True):
         x = F.relu(conv(x)).squeeze(3) #(N, num_channels_out, W)
@@ -77,9 +77,10 @@ class CNN(nn.Module):
         x = self.embedding_layer(x_indx)
         x = x.unsqueeze(1)
         x1 = self.conv_and_pool(x, self.conv1)
-        x2 = self.conv_and_pool(x, self.conv2)
+        # x2 = self.conv_and_pool(x, self.conv2)
 
-        x = torch.cat([x1, x2], 1)
+        # x = torch.cat([x1, x2], 1)
+        x = x1
         x = self.dropout(x)
         logit = self.fc1(x)
         return logit # (N,C)
