@@ -57,7 +57,7 @@ def run_epoch(data_batches, is_training, model, optimizer, args):
         # Train Group IDs are the IDs of data samples where each sample is (query, positive examples, negative examples)
         titles, bodies = autograd.Variable(t), autograd.Variable(b)
         if args.cuda:
-            titles, bodies, train_group_ids = titles.cuda(), bodies.cuda(), train_group_ids.cuda()
+            titles, bodies, train_group_ids = titles.cuda(), bodies.cuda() #, train_group_ids.cuda()
         if is_training:
             optimizer.zero_grad()
         # Encode all of the title and body text using model

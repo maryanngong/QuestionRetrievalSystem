@@ -206,7 +206,7 @@ def load_dataset():
 #   - candidate_ids: list of negative query ids
 #   - BM25: list of bm25 scores of candidate queries
 class Dataset():
-    def __init__(self, batch_size=32):
+    def __init__(self, batch_size=32, debug_mode=False):
         trainIds, devIds, testIds, allData, embeddings = load_dataset()
         self.train_batches_filename = "train_batches.pkl"
         self.dev_batches_filename = "dev_batches.pkl"
@@ -258,11 +258,11 @@ class Dataset():
 
     def get_train_batches(self, perm=None):
         batches_filename = self.train_batches_filename
-        # if os.path.exists(batches_filename):
-        #     print("reading train batches from file...")
-        #     with open(batches_filename, 'rb') as f:
-        #         batches = pickle.load(f)
-        #     return batches
+        if os.path.exists(batches_filename):
+            print("reading train batches from file...")
+            with open(batches_filename, 'rb') as f:
+                batches = pickle.load(f)
+            return batches
         data = self.trainData
         if perm is None:
             perm = range(len(data))
@@ -332,9 +332,9 @@ class Dataset():
                 pid2id = {}
                 id_to_index = {}
                 cnt = 0
-        # with open(batches_filename, 'wb') as f:
-        #     print("pickle dumping train batches...")
-        #     pickle.dump(batches, f)
+        with open(batches_filename, 'wb') as f:
+            print("pickle dumping train batches...")
+            pickle.dump(batches, f)
         return batches
 
     def create_eval_batches(self, data_set):
@@ -375,11 +375,11 @@ class Dataset():
 
     def get_test_batches(self, perm=None):
         batches_filename = self.test_batches_filename
-        # if os.path.exists(batches_filename):
-        #     print("reading train batches from file...")
-        #     with open(batches_filename, 'rb') as f:
-        #         batches = pickle.load(f)
-        #     return batches
+        if os.path.exists(batches_filename):
+            print("reading train batches from file...")
+            with open(batches_filename, 'rb') as f:
+                batches = pickle.load(f)
+            return batches
         data = self.testData
         if perm is None:
             perm = range(len(data))
@@ -441,15 +441,18 @@ class Dataset():
                 pid2id = {}
                 id_to_index = {}
                 cnt = 0
+        with open(batches_filename, 'wb') as f:
+            print("pickle dumping test batches...")
+            pickle.dump(batches, f)
         return batches
 
     def get_dev_batches(self, perm=None):
         batches_filename = self.dev_batches_filename
-        # if os.path.exists(batches_filename):
-        #     print("reading train batches from file...")
-        #     with open(batches_filename, 'rb') as f:
-        #         batches = pickle.load(f)
-        #     return batches
+        if os.path.exists(batches_filename):
+            print("reading dev batches from file...")
+            with open(batches_filename, 'rb') as f:
+                batches = pickle.load(f)
+            return batches
         data = self.devData
         if perm is None:
             perm = range(len(data))
@@ -527,9 +530,9 @@ class Dataset():
                 pid2id = {}
                 id_to_index = {}
                 cnt = 0
-        # with open(batches_filename, 'wb') as f:
-        #     print("pickle dumping train batches...")
-        #     pickle.dump(batches, f)
+        with open(batches_filename, 'wb') as f:
+            print("pickle dumping dev batches...")
+            pickle.dump(batches, f)
         return batches
 
     def get_train_data(self):
