@@ -55,7 +55,7 @@ def run_epoch(data_batches, is_training, model, optimizer, args):
             optimizer.zero_grad()
         # Encode all of the title and body text using model
         text_encodings = model(titles) # add in bodies
-
+        
         # Calculate Loss = Multi-Margin-Loss(train_group_ids, text_encodings)
         scores, target_indices = score_utils.batch_cosine_similarity(text_encodings, train_group_ids, args.cuda)
         print('SHAPE SCORES:')

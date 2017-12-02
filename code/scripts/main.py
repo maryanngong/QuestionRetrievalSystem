@@ -64,3 +64,5 @@ if __name__ == '__main__':
     # train
     if args.train :
         train_utils.train_model(data.get_train_batches(), data.get_dev_batches(), model, args)
+    else:
+        train_utils.eval_model(data.get_dev_batches(), model, args)
