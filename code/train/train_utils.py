@@ -28,6 +28,8 @@ def train_model(train_data, dev_data, model, args):
 
         # Save model
         torch.save(model, args.save_path)
+    # save final model
+    torch.save(model, args.save_path+)
 
 def run_epoch(data_batches, is_training, model, optimizer, args):
     '''
@@ -41,23 +43,12 @@ def run_epoch(data_batches, is_training, model, optimizer, args):
     N = len(data_batches)
     for i in xrange(N):
         t, b, g = data_batches[i]
-        # t, b, g = list(t), list(b), list(g)
-        # print("lengths!", len(t), len(b))
-        # print("max index", max([max(k) for k in g]))
-        # for j in range(len(t)):
-        #     # print(t[i])
-        #     t[j] = torch.LongTensor(t[j])
-        # for j in range(len(b)):
-        #     b[j] = torch.LongTensor(b[j])
-        # for j in range(len(g)):
-        #     g[j] = torch.LongTensor(g[j])
-        # t, b, train_group_ids = torch.stack(t), torch.stack(b), torch.stack(g)
         train_group_ids = g
         # Titles, Bodies are text samples (tokenized words are already converted to indices for embedding layer)
         # Train Group IDs are the IDs of data samples where each sample is (query, positive examples, negative examples)
         titles, bodies = autograd.Variable(t), autograd.Variable(b)
         if args.cuda:
-            titles, bodies, train_group_ids = titles.cuda(), bodies.cuda() #, train_group_ids.cuda()
+            titles, bodies = titles.cuda(), bodies.cuda() #, train_group_ids.cuda() <-- i don't think this needs to be a cuda variable
         if is_training:
             optimizer.zero_grad()
         # Encode all of the title and body text using model
@@ -68,7 +59,6 @@ def run_epoch(data_batches, is_training, model, optimizer, args):
         print(scores.data.shape)
         print('SHAPE TARGET_INDICES:')
         print(target_indices.data.shape)
-        # mml_loss = torch.nn.MultiMarginLoss()
         loss = F.multi_margin_loss(scores, target_indices)
         if is_training:
             loss.backward()
