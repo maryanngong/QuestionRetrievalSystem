@@ -23,6 +23,10 @@ parser.add_argument('--num_workers', nargs='?', type=int, default=4, help='num w
 # model
 parser.add_argument('--model_name', nargs="?", type=str, default='dan', help="Form of model, i.e dan, rnn, etc.")
 parser.add_argument('--num_hidden', type=int, default=32, help="encoding size.")
+#cnn
+parser.add_argument('--num_channels', type=int, default=5, help="Number of channels for CNN model aka depth?")
+parser.add_argument('--filter_width', type=int, default=3, help="width dimension of CNN filter")
+parser.add_argument('--use_mean_pooling', action='store_true', default=False, help="type of pooling to use for CNN")
 # device
 parser.add_argument('--cuda', action='store_true', default=False, help='enable the gpu')
 parser.add_argument('--cuda_device', type=int, default=0, help='specify GPU number to use')

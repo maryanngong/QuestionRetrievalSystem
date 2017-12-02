@@ -60,10 +60,10 @@ class CNN(nn.Module):
         self.embedding_layer.weight.data = torch.from_numpy( embeddings )
 
         self.conv1 = nn.Conv2d(1, num_channels_out, kernel_sizes[0])
-        self.conv2 = nn.Conv2d(1, num_channels_out, kernel_sizes[1])
+        # self.conv2 = nn.Conv2d(1, num_channels_out, kernel_sizes[1])
         self.dropout = nn.Dropout(0.5)
         # the 2 refers to having 2 conv layers
-        self.fc1 = nn.Linear(2*num_channels_out, args.num_hidden)
+        self.fc1 = nn.Linear(1*num_channels_out, args.num_hidden)
 
     def conv_and_pool(self, x, conv, max_pool=True):
         x = F.relu(conv(x)).squeeze(3) #(N, num_channels_out, W)
@@ -77,9 +77,10 @@ class CNN(nn.Module):
         x = self.embedding_layer(x_indx)
         x = x.unsqueeze(1)
         x1 = self.conv_and_pool(x, self.conv1)
-        x2 = self.conv_and_pool(x, self.conv2)
+        # x2 = self.conv_and_pool(x, self.conv2)
 
-        x = torch.cat([x1, x2], 1)
+        # x = torch.cat([x1, x2], 1)
+        x = x1
         x = self.dropout(x)
         logit = self.fc1(x)
         return logit # (N,C)
@@ -116,14 +117,24 @@ class LSTM(nn.Module):
         self.embed_dim = embed_dim
         self.embedding_layer = nn.Embedding( vocab_size, embed_dim)
         self.embedding_layer.weight.data = torch.from_numpy( embeddings )
-        self.rnn = nn.LSTM(input_size=embed_dim, hidden_size=200,
+        self.rnn = nn.LSTM(input_size=embed_dim, hidden_size=args.num_hidden,
                           num_layers=1, batch_first=True)
-        self.W_o = nn.Linear(200,1)
+        self.W_o = nn.Linear(args.num_hidden,1)
+
+    def init_hidden_states(self, batch_size):
+        h0 = autograd.Variable(torch.randn(1, batch_size, self.args.num_hidden))
+        c0 = autograd.Variable(torch.randn(1, batch_size, self.args.num_hidden))
+        if self.args.cuda:
+            h0 = h0.cuda()
+            c0 = c0.cuda()
+        return (h0, c0)
+
 
     def forward(self, x_indx):
         all_x = self.embedding_layer(x_indx)
-        h0 = autograd.Variable(torch.randn(1, self.args.batch_size, 200))
-        output, h_n = self.rnn(all_x, h0)
-        h_n = h_n.squeeze(0)
+        batch_size = len(x_indx)
+        h0, c0 = self.init_hidden_states(batch_size)
+        output, (h_n, c_n) = self.rnn(all_x, (h0, c0))
+        h_n = output.squeeze(0)
         out = self.W_o(h_n )
         return out

@@ -27,9 +27,9 @@ def train_model(train_data, dev_data, model, args):
         print('Val max-margin loss: {:.6f}'.format( val_loss))
 
         # Save model
-        torch.save(model, args.save_path)
+        torch.save(model, args.save_path+"_epoch"+str(epoch))
     # save final model
-    torch.save(model, args.save_path+)
+    torch.save(model, args.save_path+str(args.num_hidden)+"_final")
 
 def run_epoch(data_batches, is_training, model, optimizer, args):
     '''
@@ -52,9 +52,13 @@ def run_epoch(data_batches, is_training, model, optimizer, args):
         if is_training:
             optimizer.zero_grad()
         # Encode all of the title and body text using model
-        text_encodings = model(titles) # add in bodies
+        title_encodings = model(titles) # add in bodies
+        body_encodings = model(bodies)
+
+        # combine title and body
+        text_encodings = 0.5*title_encodings + 0.5*body_encodings
         # Calculate Loss = Multi-Margin-Loss(train_group_ids, text_encodings)
-        scores, target_indices = score_utils.batch_cosine_similarity(text_encodings, train_group_ids)
+        scores, target_indices = score_utils.batch_cosine_similarity(text_encodings, train_group_ids, args.cuda)
         print('SHAPE SCORES:')
         print(scores.data.shape)
         print('SHAPE TARGET_INDICES:')
