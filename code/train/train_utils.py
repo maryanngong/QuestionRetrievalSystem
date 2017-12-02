@@ -54,14 +54,15 @@ def run_epoch(data_batches, is_training, model, optimizer, args):
         if is_training:
             optimizer.zero_grad()
         # Encode all of the title and body text using model
-        text_encodings = model(titles) # add in bodies
-
+        titles_encodings = F.normalize(model(titles))
+        bodies_encodings = F.normalize(model(bodies))
+        text_encodings = (titles_encodings + bodies_encodings) * 0.5
         # Calculate Loss = Multi-Margin-Loss(train_group_ids, text_encodings)
         scores, target_indices = score_utils.batch_cosine_similarity(text_encodings, train_group_ids, args.cuda)
-        print('SHAPE SCORES:')
-        print(scores.data.shape)
-        print('SHAPE TARGET_INDICES:')
-        print(target_indices.data.shape)
+        # print('SHAPE SCORES:')
+        # print(scores.data.shape)
+        # print('SHAPE TARGET_INDICES:')
+        # print(target_indices.data.shape)
         loss = F.multi_margin_loss(scores, target_indices)
         if is_training:
             loss.backward()
@@ -70,18 +71,17 @@ def run_epoch(data_batches, is_training, model, optimizer, args):
         print("BATCH LOSS "+str(i+1)+" out of "+str(N)+": ")
         print(loss.cpu().data[0])
         # Evaluation Metrics
-        if not is_training:
-            rankings = compile_rankings(train_group_ids, scores)
-            results = strip_ids_and_scores(rankings)
-            precision_at_1 = eval_utils.precision_at_k(results, 1)
-            precision_at_5 = eval_utils.precision_at_k(results, 5)
-            MAP = eval_utils.mean_average_precision(results)
-            MRR = eval_utils.mean_reciprocal_rank(results)
-            print(tabulate([[MAP, MRR, precision_at_1, precision_at_5]], headers=['MAP', 'MRR', 'P@1', 'P@5']))
+        rankings = compile_rankings(train_group_ids, scores.cpu().data)
+        results = strip_ids_and_scores(rankings)
+        precision_at_1 = eval_utils.precision_at_k(results, 1)
+        precision_at_5 = eval_utils.precision_at_k(results, 5)
+        MAP = eval_utils.mean_average_precision(results)
+        MRR = eval_utils.mean_reciprocal_rank(results)
+        print(tabulate([[MAP, MRR, precision_at_1, precision_at_5]], headers=['MAP', 'MRR', 'P@1', 'P@5']))
     avg_loss = np.mean(losses)
     return avg_loss
 
-def compile_rankings(train_group_ids, scores):
+def compile_rankings(train_group_ids, scores_variable):
     '''Compiles a list of lists ranking the queries by their scores
 
     Args:
@@ -95,6 +95,7 @@ def compile_rankings(train_group_ids, scores):
     [[(201, 0.97, 1), (200, 0.91, 1), (987, 0.3, 0), (876, 0.25, 0), (567, 0.1, 0)], [(243, 0.84, 1), (902, 0.41, 0), (939, 0.2001, 0), (581, 0.15, 0)]]
 
     '''
+    scores = scores_variable.data
     all_rankings, rankings = [], []
     last_question_id = None
     for i, group in enumerate(train_group_ids):
