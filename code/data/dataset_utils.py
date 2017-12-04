@@ -324,7 +324,7 @@ class Dataset():
             # pid = pid2id[pid]
             # pos = [ pid2id[q] for q, l in zip(qids, qlabels) if l == 1 and q in pid2id ]
             # neg = [ pid2id[q] for q, l in zip(qids, qlabels) if l == 0 and q in pid2id ]
-            triples += [ [p_index, x] + negative_indices for x in positive_indices ]
+            triples += [ [p_index, x] + negative_indices[:self.limit] for x in positive_indices ]
 
             padding_id = self.padding_id
             pad_left = self.pad_left
