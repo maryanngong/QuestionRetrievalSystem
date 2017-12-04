@@ -18,6 +18,8 @@ def get_model(embeddings, args):
         return DAN(embeddings, args)
     elif args.model_name == 'cnn':
         return CNN(embeddings, args)
+    elif args.model_name == 'cnn2':
+        return CNN2(embeddings, args)
     elif args.model_name == 'rnn':
         return RNN(embeddings, args)
     elif args.model_name == 'lstm':
@@ -43,6 +45,36 @@ class DAN(nn.Module):
         hidden = F.tanh( self.W_hidden(avg_x) )
         # out = self.W_out(hidden)
         return hidden
+
+
+class CNN2(nn.Module):
+
+    def __init__(self, embeddings, args):
+        super(CNN2, self).__init__()
+        self.args = args
+        vocab_size, embed_dim = embeddings.shape
+
+        self.embedding_layer = nn.Embedding( vocab_size, embed_dim)
+        self.embedding_layer.weight.data = torch.from_numpy( embeddings )
+
+        self.layer1 = nn.Sequential(
+            nn.Conv1d(embed_dim, 32, kernel_size=3),
+            # nn.BatchNorm1d(16),
+            # nn.ReLU(),
+            nn.AvgPool1d(2))
+        self.fc = nn.Linear(32*31, args.num_hidden)
+
+    def forward(self, x_indx):
+        x = self.embedding_layer(x_indx)
+        x = x.permute(0,2,1)
+        print("size x after embedding", x.size())
+        out = self.layer1(x)
+        print("size out", out.size())
+        out = out.view(out.size(0), -1)
+        print("view out", out.size())
+        out = self.fc(out)
+        print("after fc out", out.size())
+        return out
 
 
 # TODO Finish modifying DAN code to use CNN-style layers
