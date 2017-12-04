@@ -44,7 +44,7 @@ def getEmbeddingTensor():
     embedding_tensor = np.array(embedding_tensor, dtype=np.float32)
     return embedding_tensor, word_to_indx
 
-def getIndicesTensor(text_arr, word_to_indx, max_length=1000):
+def getIndicesTensor(text_arr, word_to_indx, max_length=100):
     nil_indx = 0
     text_indx = [ word_to_indx[x] if x in word_to_indx else nil_indx for x in text_arr][:max_length]
     # if len(text_indx) < max_length:
@@ -208,9 +208,9 @@ def load_dataset():
 class Dataset():
     def __init__(self, batch_size=32, debug_mode=False):
         trainIds, devIds, testIds, allData, embeddings = load_dataset()
-        self.train_batches_filename = "train_batches.pkl"
-        self.dev_batches_filename = "dev_batches.pkl"
-        self.test_batches_filename = "test_batches.pkl"
+        self.train_batches_filename = "train_batches_2.pkl"
+        self.dev_batches_filename = "dev_batches_2.pkl"
+        self.test_batches_filename = "test_batches_2.pkl"
         self.allData = allData
         self.trainIds = trainIds
         self.devIds = devIds
@@ -221,7 +221,11 @@ class Dataset():
         self.testData = None
         self.padding_id = 0 # get padding id from embeddings?
         self.pad_left = False
+        self.limit=20
         self.batch_size = batch_size
+        self.train_batches = None
+        self.dev_batches = None
+        self.test_batches = None
 
         self.get_train_data()
         self.get_test_data()
@@ -257,6 +261,9 @@ class Dataset():
         return query_group
 
     def get_train_batches(self, perm=None):
+        if self.train_batches is not None:
+            print("returning train batches...")
+            return self.train_batches
         batches_filename = self.train_batches_filename
         if os.path.exists(batches_filename):
             print("reading train batches from file...")
@@ -312,6 +319,7 @@ class Dataset():
             p_index = id_to_index[pid]
             positive_indices = [id_to_index[p] for p in positive_ids]
             negative_indices = [id_to_index[p] for p in negative_ids]
+
 
             # pid = pid2id[pid]
             # pos = [ pid2id[q] for q, l in zip(qids, qlabels) if l == 1 and q in pid2id ]
@@ -374,9 +382,12 @@ class Dataset():
         return lst
 
     def get_test_batches(self, perm=None):
+        if self.test_batches is not None:
+            print("returning test batches...")
+            return self.test_batches
         batches_filename = self.test_batches_filename
         if os.path.exists(batches_filename):
-            print("reading train batches from file...")
+            print("reading test batches from file...")
             with open(batches_filename, 'rb') as f:
                 batches = pickle.load(f)
             return batches
@@ -447,6 +458,9 @@ class Dataset():
         return batches
 
     def get_dev_batches(self, perm=None):
+        if self.dev_batches is not None:
+            print("returning dev batches...")
+            return self.dev_batches
         batches_filename = self.dev_batches_filename
         if os.path.exists(batches_filename):
             print("reading dev batches from file...")
@@ -588,16 +602,16 @@ class Dataset():
 
 if __name__ == '__main__':
     dataset = Dataset()
-    train = dataset.get_train_data()
-    dev = dataset.get_dev_data()
-    test = dataset.get_test_data()
+    train = dataset.get_train_batches()
+    dev = dataset.get_dev_batches()
+    test = dataset.get_test_batches()
     print "train.."
     # print train.head()
     print ""
     print ""
     print "dev..."
-    print dev.head()
+    # print dev.head()
     print ""
     print ""
     print "test..."
-    print test.head()
+    # print test.head()

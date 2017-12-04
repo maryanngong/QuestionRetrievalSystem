@@ -65,12 +65,12 @@ class CNN(nn.Module):
         # the 2 refers to having 2 conv layers
         self.fc1 = nn.Linear(1*num_channels_out, args.num_hidden)
 
-    def conv_and_pool(self, x, conv, max_pool=True):
+    def conv_and_pool(self, x, conv, max_pool=False):
         x = F.relu(conv(x)).squeeze(3) #(N, num_channels_out, W)
         if max_pool:
             x = F.max_pool1d(x, x.size(2)).squeeze(2)
         else: # mean pool instead
-            x = F.mean_pool1d(x, x.size(2)).squeeze(2)
+            x = F.avg_pool1d(x, x.size(2)).squeeze(2)
         return x
 
     def forward(self, x_indx):
@@ -119,7 +119,7 @@ class LSTM(nn.Module):
         self.embedding_layer.weight.data = torch.from_numpy( embeddings )
         self.rnn = nn.LSTM(input_size=embed_dim, hidden_size=args.num_hidden,
                           num_layers=1, batch_first=True)
-        self.W_o = nn.Linear(args.num_hidden,1)
+        # self.W_o = nn.Linear(args.num_hidden,1)
 
     def init_hidden_states(self, batch_size):
         h0 = autograd.Variable(torch.randn(1, batch_size, self.args.num_hidden))
@@ -135,6 +135,8 @@ class LSTM(nn.Module):
         batch_size = len(x_indx)
         h0, c0 = self.init_hidden_states(batch_size)
         output, (h_n, c_n) = self.rnn(all_x, (h0, c0))
-        h_n = output.squeeze(0)
-        out = self.W_o(h_n )
-        return out
+        # print("shape of output", output.size())
+        output = torch.mean(output, 1)
+        return output
+        # out = self.W_o(h_n )
+        # return out

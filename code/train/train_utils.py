@@ -25,13 +25,51 @@ def train_model(train_data, dev_data, model, args):
         print('Train max-margin loss: {:.6f}'.format( loss))
         print()
 
+        # Save model
+        torch.save(model, args.save_path+"_size"+str(args.num_hidden)+"_epoch"+str(epoch))
+
         val_loss = run_epoch(dev_data, False, model, optimizer, args)
         print('Val max-margin loss: {:.6f}'.format( val_loss))
 
-        # Save model
-        torch.save(model, args.save_path+"_epoch"+str(epoch))
     # save final model
-    torch.save(model, args.save_path+str(args.num_hidden)+"_final")
+    torch.save(model, args.save_path+"_size"+str(args.num_hidden)+"_final")
+
+def eval_model(data_batches, model, args):
+    if args.cuda:
+        model = model.cuda()
+
+    model.eval()
+    N = len(data_batches)
+    all_results = []
+    for i in xrange(N):
+        t, b, g = data_batches[i]
+        train_group_ids = g
+        # Titles, Bodies are text samples (tokenized words are already converted to indices for embedding layer)
+        # Train Group IDs are the IDs of data samples where each sample is (query, positive examples, negative examples)
+        titles, bodies = autograd.Variable(t), autograd.Variable(b)
+        if args.cuda:
+            titles, bodies = titles.cuda(), bodies.cuda() #, train_group_ids.cuda() <-- i don't think this needs to be a cuda variable
+
+        # Encode all of the title and body text using model
+
+        titles_encodings = F.normalize(model(titles))
+        bodies_encodings = F.normalize(model(bodies))
+        text_encodings = (titles_encodings + bodies_encodings) * 0.5
+        # Calculate Loss = Multi-Margin-Loss(train_group_ids, text_encodings)
+        scores, target_indices = score_utils.batch_cosine_similarity(text_encodings, train_group_ids, args.cuda)
+        loss = F.multi_margin_loss(scores, target_indices)
+        print("loss:", loss)
+        # Evaluation Metrics
+        rankings = compile_rankings(train_group_ids, scores.cpu().data.numpy())
+        results = strip_ids_and_scores(rankings)
+        all_results += results
+
+    precision_at_1 = eval_utils.precision_at_k(all_results, 1)
+    precision_at_5 = eval_utils.precision_at_k(all_results, 5)
+    MAP = eval_utils.mean_average_precision(all_results)
+    MRR = eval_utils.mean_reciprocal_rank(all_results)
+    print(tabulate([[MAP, MRR, precision_at_1, precision_at_5]], headers=['MAP', 'MRR', 'P@1', 'P@5']))
+
 
 def run_epoch(data_batches, is_training, model, optimizer, args):
     '''
@@ -57,6 +95,7 @@ def run_epoch(data_batches, is_training, model, optimizer, args):
 
         titles_encodings = F.normalize(model(titles))
         bodies_encodings = F.normalize(model(bodies))
+        print("sizes of encodings", type(titles_encodings), titles_encodings.size(), bodies_encodings.size())
         text_encodings = (titles_encodings + bodies_encodings) * 0.5
         # Calculate Loss = Multi-Margin-Loss(train_group_ids, text_encodings)
         scores, target_indices = score_utils.batch_cosine_similarity(text_encodings, train_group_ids, args.cuda)
@@ -72,13 +111,14 @@ def run_epoch(data_batches, is_training, model, optimizer, args):
         print("BATCH LOSS "+str(i+1)+" out of "+str(N)+": ")
         print(loss.cpu().data[0])
         # Evaluation Metrics
-        rankings = compile_rankings(train_group_ids, scores.cpu().data)
-        results = strip_ids_and_scores(rankings)
-        precision_at_1 = eval_utils.precision_at_k(results, 1)
-        precision_at_5 = eval_utils.precision_at_k(results, 5)
-        MAP = eval_utils.mean_average_precision(results)
-        MRR = eval_utils.mean_reciprocal_rank(results)
-        print(tabulate([[MAP, MRR, precision_at_1, precision_at_5]], headers=['MAP', 'MRR', 'P@1', 'P@5']))
+        if not is_training:
+            rankings = compile_rankings(train_group_ids, scores.cpu().data.numpy())
+            results = strip_ids_and_scores(rankings)
+            precision_at_1 = eval_utils.precision_at_k(results, 1)
+            precision_at_5 = eval_utils.precision_at_k(results, 5)
+            MAP = eval_utils.mean_average_precision(results)
+            MRR = eval_utils.mean_reciprocal_rank(results)
+            print(tabulate([[MAP, MRR, precision_at_1, precision_at_5]], headers=['MAP', 'MRR', 'P@1', 'P@5']))
     avg_loss = np.mean(losses)
     return avg_loss
 
@@ -96,7 +136,7 @@ def compile_rankings(train_group_ids, scores_variable):
     [[(201, 0.97, 1), (200, 0.91, 1), (987, 0.3, 0), (876, 0.25, 0), (567, 0.1, 0)], [(243, 0.84, 1), (902, 0.41, 0), (939, 0.2001, 0), (581, 0.15, 0)]]
 
     '''
-    scores = scores_variable.data
+    scores = scores_variable #.data
     all_rankings, rankings = [], []
     last_question_id = None
     for i, group in enumerate(train_group_ids):

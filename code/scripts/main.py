@@ -65,4 +65,8 @@ if __name__ == '__main__':
     if args.train :
         train_utils.train_model(data.get_train_batches(), data.get_dev_batches(), model, args)
     else:
+        print("Evaluating performance on dev data...")
         train_utils.eval_model(data.get_dev_batches(), model, args)
+        print()
+        print("Evaluating performance on test data...")
+        train_utils.eval_model(data.get_test_batches(), model, args)
