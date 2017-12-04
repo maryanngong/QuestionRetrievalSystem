@@ -57,23 +57,34 @@ class CNN2(nn.Module):
         self.embedding_layer = nn.Embedding( vocab_size, embed_dim)
         self.embedding_layer.weight.data = torch.from_numpy( embeddings )
 
+        self.conv1 = nn.Conv1d(embed_dim, args.num_hidden, kernel_size=3)
+        # self.pool1 = nn.AvgPool1d()
+
         self.layer1 = nn.Sequential(
             nn.Conv1d(embed_dim, 32, kernel_size=3),
             # nn.BatchNorm1d(16),
             # nn.ReLU(),
             nn.AvgPool1d(2))
-        self.fc = nn.Linear(32*31, args.num_hidden)
+        self.fc = nn.Linear(32*15, args.num_hidden)
+
+    # def forward(self, x_indx):
+    #     x = self.embedding_layer(x_indx)
+    #     x = x.permute(0,2,1)
+    #     print("size x after embedding", x.size())
+    #     out = self.layer1(x)
+    #     print("size out", out.size())
+    #     out = out.view(out.size(0), -1)
+    #     print("view out", out.size())
+    #     out = self.fc(out)
+    #     print("after fc out", out.size())
+    #     return out
 
     def forward(self, x_indx):
         x = self.embedding_layer(x_indx)
-        x = x.permute(0,2,1)
-        print("size x after embedding", x.size())
-        out = self.layer1(x)
-        print("size out", out.size())
-        out = out.view(out.size(0), -1)
-        print("view out", out.size())
-        out = self.fc(out)
-        print("after fc out", out.size())
+        x =x.permute(0,2,1)
+        out = self.conv1(x)
+        out = torch.mean(out, 2)
+        print("size of out", out.size())
         return out
 
 
