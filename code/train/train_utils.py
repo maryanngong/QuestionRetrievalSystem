@@ -43,6 +43,8 @@ def run_epoch(data_batches, is_training, model, optimizer, args):
     else:
         model.eval()
     N = len(data_batches)
+    all_train_group_ids = None
+    all_scores = None
     for i in xrange(N):
         t, b, g = data_batches[i]
         train_group_ids = g
@@ -71,14 +73,23 @@ def run_epoch(data_batches, is_training, model, optimizer, args):
         losses.append(loss.cpu().data[0])
         print("BATCH LOSS "+str(i+1)+" out of "+str(N)+": ")
         print(loss.cpu().data[0])
-        # Evaluation Metrics
-        rankings = compile_rankings(train_group_ids, scores.cpu().data)
-        results = strip_ids_and_scores(rankings)
-        precision_at_1 = eval_utils.precision_at_k(results, 1)
-        precision_at_5 = eval_utils.precision_at_k(results, 5)
-        MAP = eval_utils.mean_average_precision(results)
-        MRR = eval_utils.mean_reciprocal_rank(results)
-        print(tabulate([[MAP, MRR, precision_at_1, precision_at_5]], headers=['MAP', 'MRR', 'P@1', 'P@5']))
+        # Concat with cumulative vars for eval at end of epoch
+        if all_train_group_ids is None:
+            all_train_group_ids = train_group_ids
+        else:
+            all_train_group_ids = torch.cat(all_train_group_ids, train_group_ids)
+        if all_scores is None:
+            all_scores = scores
+        else:
+            all_scores = torch.cat(all_scores, scores)
+    # Evaluation Metrics
+    rankings = compile_rankings(all_train_group_ids, all_scores.cpu().data)
+    results = strip_ids_and_scores(rankings)
+    precision_at_1 = eval_utils.precision_at_k(results, 1)
+    precision_at_5 = eval_utils.precision_at_k(results, 5)
+    MAP = eval_utils.mean_average_precision(results)
+    MRR = eval_utils.mean_reciprocal_rank(results)
+    print(tabulate([[MAP, MRR, precision_at_1, precision_at_5]], headers=['MAP', 'MRR', 'P@1', 'P@5']))
     avg_loss = np.mean(losses)
     return avg_loss
 
