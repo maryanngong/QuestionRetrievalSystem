@@ -28,6 +28,8 @@ def get_model(embeddings, args):
         return LSTM(embeddings, args)
     elif args.model_name == 'lstm2':
         return LSTM2(embeddings, args)
+    elif args.model_name == 'lstm3':
+        return LSTM3(embeddings, args)
     else:
         raise Exception("Model name {} not supported!".format(args.model_name))
 
@@ -104,30 +106,13 @@ class CNN3(nn.Module):
         self.conv1 = nn.Conv1d(embed_dim, args.num_hidden, kernel_size=3)
         # self.pool1 = nn.AvgPool1d()
 
-        self.layer1 = nn.Sequential(
-            nn.Conv1d(embed_dim, 32, kernel_size=3),
-            # nn.BatchNorm1d(16),
-            # nn.ReLU(),
-            nn.AvgPool1d(2))
-        self.fc = nn.Linear(32*15, args.num_hidden)
 
-    # def forward(self, x_indx):
-    #     x = self.embedding_layer(x_indx)
-    #     x = x.permute(0,2,1)
-    #     print("size x after embedding", x.size())
-    #     out = self.layer1(x)
-    #     print("size out", out.size())
-    #     out = out.view(out.size(0), -1)
-    #     print("view out", out.size())
-    #     out = self.fc(out)
-    #     print("after fc out", out.size())
-    #     return out
 
     def forward(self, x_indx):
         x = self.embedding_layer(x_indx)
         x =x.permute(0,2,1)
         out = self.conv1(x)
-        out = torch.mean(out, 2)
+        out = torch.sum(out, 2)
         # print("size of out", out.size())
         return out
 
@@ -228,6 +213,37 @@ class LSTM(nn.Module):
         # out = self.W_o(h_n )
         # return out
 
+class LSTM3(nn.Module):
+
+    def __init__(self, embeddings, args):
+        super(LSTM3, self).__init__()
+        self.args = args
+        vocab_size, embed_dim = embeddings.shape
+        self.embed_dim = embed_dim
+        self.embedding_layer = nn.Embedding( vocab_size, embed_dim)
+        self.embedding_layer.weight.data = torch.from_numpy( embeddings )
+        self.rnn = nn.LSTM(input_size=embed_dim, hidden_size=args.num_hidden,
+                          num_layers=1, batch_first=True)
+        # self.W_o = nn.Linear(args.num_hidden,1)
+
+    def init_hidden_states(self, batch_size):
+        h0 = autograd.Variable(torch.randn(1, batch_size, self.args.num_hidden))
+        c0 = autograd.Variable(torch.randn(1, batch_size, self.args.num_hidden))
+        if self.args.cuda:
+            h0 = h0.cuda()
+            c0 = c0.cuda()
+        return (h0, c0)
+
+
+    def forward(self, x_indx):
+        all_x = self.embedding_layer(x_indx)
+        batch_size = len(x_indx)
+        h0, c0 = self.init_hidden_states(batch_size)
+        output, (h_n, c_n) = self.rnn(all_x, (h0, c0))
+        # print("shape of output", output.size())
+        output = torch.sum(output, 1)
+        return output
+
 class LSTM2(nn.Module):
 
     def __init__(self, embeddings, args):
@@ -256,7 +272,7 @@ class LSTM2(nn.Module):
         h0, c0 = self.init_hidden_states(batch_size)
         output, (h_n, c_n) = self.rnn(all_x, (h0, c0))
         output = torch.mean(output, 1)
-        print("lstm2 shape of output", output.size())
+        # print("lstm2 shape of output", output.size())
         return output
         # out = self.W_o(h_n )
         # return out

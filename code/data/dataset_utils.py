@@ -71,20 +71,22 @@ def map_corpus(raw_corpus, embedding_layer, max_len=100):
 def create_one_batch(titles, bodies, padding_id, pad_left):
     max_title_len = max(1, max(len(x) for x in titles))
     max_body_len = max(1, max(len(x) for x in bodies))
+    og_title_lens = [len(x) for x in titles]
+    og_body_lens = [len(x) for x in bodies]
     if pad_left:
         padded_titles = [ torch.from_numpy(np.pad(x,(max_title_len-len(x),0),'constant',
                                 constant_values=padding_id).astype(np.int64)) for x in titles]
         padded_bodies = [ torch.from_numpy(np.pad(x,(max_body_len-len(x),0),'constant',
                                 constant_values=padding_id).astype(np.int64)) for x in bodies]
         # l = len(padded_titles[0])
-        return np.stack(padded_titles), np.stack(padded_bodies)
+        return np.stack(padded_titles), np.stack(padded_bodies), og_title_lens, og_body_lens
     else:
         padded_titles = [ torch.from_numpy(np.pad(x,(0,max_title_len-len(x)),'constant',
                                 constant_values=padding_id).astype(np.int64)) for x in titles]
         padded_bodies = [ torch.from_numpy(np.pad(x,(0,max_body_len-len(x)),'constant',
                                 constant_values=padding_id).astype(np.int64)) for x in bodies]
         # l = len(padded_titles[0])
-        return torch.stack(padded_titles), torch.stack(padded_bodies)
+        return torch.stack(padded_titles), torch.stack(padded_bodies), og_title_lens, og_body_lens
     return titles, bodies
 
 def create_hinge_batch(triples, train=True):
@@ -209,7 +211,7 @@ def load_dataset():
 #   - candidate_ids: list of negative query ids
 #   - BM25: list of bm25 scores of candidate queries
 class Dataset():
-    def __init__(self, batch_size=32, debug_mode=False):
+    def __init__(self, batch_size=64, debug_mode=False):
         trainIds, devIds, testIds, allData, embeddings = load_dataset()
         self.train_batches_filename = "train_batches_2.pkl"
         self.dev_batches_filename = "dev_batches_2.pkl"
@@ -334,9 +336,9 @@ class Dataset():
             if cnt == self.batch_size or u == N-1:
                 # assert len(titles) == len(bodies)
                 # assert max(id_to_index.values()) <= len(titles)
-                titles, bodies = create_one_batch(titles, bodies, padding_id, pad_left)
+                titles, bodies, title_lens, body_lens = create_one_batch(titles, bodies, padding_id, pad_left)
                 triples = create_hinge_batch(triples)
-                batches.append((titles, bodies, triples))
+                batches.append((titles, bodies, triples, title_lens, body_lens))
                 titles = [ ]
                 bodies = [ ]
                 triples = [ ]
@@ -381,8 +383,8 @@ class Dataset():
                 titles.append(negative_text_tokens[0][k])
                 bodies.append(negative_text_tokens[1][k])
             # print("length of title and bodies", len(titles), len(bodies))
-            titles, bodies = create_one_batch(titles, bodies, padding_id, pad_left)
-            lst.append((titles, bodies, np.array(qlabels, dtype="int32")))
+            titles, bodies, title_lens, body_lens = create_one_batch(titles, bodies, padding_id, pad_left)
+            lst.append((titles, bodies, np.array(qlabels, dtype="int32"), title_lens, body_lens))
         # with open(batches_filename, 'wb') as f:
         #     pickle.dump(lst, f)
         return lst
@@ -420,8 +422,8 @@ class Dataset():
                 titles.append(candidate_text_tokens[0][j])
                 bodies.append(candidate_text_tokens[1][j])
             # print("length of title and bodies", len(titles), len(bodies))
-            titles, bodies = create_one_batch(titles, bodies, padding_id, pad_left)
-            lst.append((titles, bodies, np.array(qlabels, dtype="int32")))
+            titles, bodies, title_lens, body_lens = create_one_batch(titles, bodies, padding_id, pad_left)
+            lst.append((titles, bodies, np.array(qlabels, dtype="int32"), title_lens, body_lens))
         # with open(batches_filename, 'wb') as f:
         #     pickle.dump(lst, f)
         return lst
@@ -488,7 +490,7 @@ class Dataset():
             if cnt == self.batch_size or u == N-1:
                 # assert len(titles) == len(bodies)
                 # assert max(id_to_index.values()) <= len(titles)
-                titles, bodies = create_one_batch(titles, bodies, padding_id, pad_left)
+                titles, bodies, _, _ = create_one_batch(titles, bodies, padding_id, pad_left)
                 triples = create_hinge_batch(triples, train=False)
                 batches.append((titles, bodies, triples))
                 titles = [ ]
@@ -583,7 +585,7 @@ class Dataset():
             if cnt == self.batch_size or u == N-1:
                 # assert len(titles) == len(bodies)
                 # assert max(id_to_index.values()) <= len(titles)
-                titles, bodies = create_one_batch(titles, bodies, padding_id, pad_left)
+                titles, bodies, _, _ = create_one_batch(titles, bodies, padding_id, pad_left)
                 triples = create_hinge_batch(triples, train=False)
                 batches.append((titles, bodies, triples))
                 titles = [ ]

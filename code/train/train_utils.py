@@ -12,25 +12,25 @@ import numpy as np
 import score_utils as score_utils
 import evaluation_utils as eval_utils
 
-def train_model(dataset, dev_data, model, args):
+def train_model(dataset, dev_data, model, args, perm=False):
     if args.cuda:
         model = model.cuda()
     optimizer = torch.optim.Adam(model.parameters() , lr=args.lr)
     model.train()
+
+    if not perm:
+        train_data = dataset.get_train_batches()
 
     best_epoch = 0
     best_MAP = 0
     for epoch in range(1, args.epochs+1):
         print("-------------\nEpoch {}:\n".format(epoch))
         # randomize new dataset each time
-        train_data = dataset.get_train_batches()
+        if perm:
+            train_data = dataset.get_train_batches()
         loss = run_epoch(train_data, True, model, optimizer, args)
         print('Train max-margin loss: {:.6f}'.format( loss))
         print()
-
-        if epoch%2 == 1:
-            # Save model
-            torch.save(model, args.save_path+"_size"+str(args.num_hidden)+"_epoch"+str(epoch))
 
         # val_loss = run_epoch(dev_data, False, model, optimizer, args)
         # print('Val max-margin loss: {:.6f}'.format( val_loss))
@@ -38,6 +38,8 @@ def train_model(dataset, dev_data, model, args):
         if MAP > best_MAP:
             best_MAP = MAP
             best_epoch = epoch
+            # Save model
+            torch.save(model, args.save_path+"_size"+str(args.num_hidden)+"_epoch"+str(epoch))
         print("Best EPOCH so far:", best_epoch, best_MAP)
 
     # save final model
@@ -52,14 +54,22 @@ def eval_model_two(data_batches, model, args):
     N = len(data_batches)
     all_results = []
     for i in xrange(N):
-        t, b, qlabels = data_batches[i]
+        t, b, qlabels, t_lens, b_lens = data_batches[i]
         assert qlabels[0] == -1
         # print("lengths in eval", t.shape, b.shape, len(qlabels))
         titles, bodies = autograd.Variable(t), autograd.Variable(b)
         if args.cuda:
             titles, bodies = titles.cuda(), bodies.cuda()
-        titles_encodings = F.normalize(model(titles))
-        bodies_encodings = F.normalize(model(bodies))
+        if args.model_name == 'lstm3' or args.model_name == 'cnn3':
+            titles_encodings = model(titles)
+            bodies_encodings = model(bodies)
+            for j in range(len(t_lens)):
+                titles_encodings[j] = titles_encodings[j] * 1.0 / max(1, t_lens[j])
+                bodies_encodings[j] = bodies_encodings[j] * 1.0 / max(1, b_lens[j])
+        else:
+            # print("doing the right one..")
+            titles_encodings = F.normalize(model(titles))
+            bodies_encodings = F.normalize(model(bodies))
         text_encodings = (titles_encodings + bodies_encodings) * 0.5
         # Calculate Loss = Multi-Margin-Loss(train_group_ids, text_encodings)
         scores = score_utils.batch_cosine_similarity_eval(text_encodings, cuda=args.cuda)
@@ -126,7 +136,7 @@ def run_epoch(data_batches, is_training, model, optimizer, args):
     all_scores = None
     all_results = []
     for i in xrange(N):
-        t, b, g = data_batches[i]
+        t, b, g, t_lens, b_lens = data_batches[i]
         train_group_ids = g
         # Titles, Bodies are text samples (tokenized words are already converted to indices for embedding layer)
         # Train Group IDs are the IDs of data samples where each sample is (query, positive examples, negative examples)
@@ -136,8 +146,16 @@ def run_epoch(data_batches, is_training, model, optimizer, args):
         if is_training:
             optimizer.zero_grad()
         # Encode all of the title and body text using model
-        titles_encodings = F.normalize(model(titles))
-        bodies_encodings = F.normalize(model(bodies))
+        if args.model_name == 'lstm3' or args.model_name == 'cnn3':
+            titles_encodings = model(titles)
+            bodies_encodings = model(bodies)
+            for j in range(len(t_lens)):
+                titles_encodings[j] = titles_encodings[j] * 1.0 / max(t_lens[j], 1)
+                bodies_encodings[j] = bodies_encodings[j] * 1.0 / max(1, b_lens[j])
+        else:
+            titles_encodings = F.normalize(model(titles))
+            bodies_encodings = F.normalize(model(bodies))
+
         print("sizes of encodings", type(titles_encodings), titles_encodings.size(), bodies_encodings.size())
         text_encodings = (titles_encodings + bodies_encodings) * 0.5
         # Calculate Loss = Multi-Margin-Loss(train_group_ids, text_encodings)
