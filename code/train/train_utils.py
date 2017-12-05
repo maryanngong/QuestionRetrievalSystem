@@ -12,27 +12,67 @@ import numpy as np
 import score_utils as score_utils
 import evaluation_utils as eval_utils
 
-def train_model(train_data, dev_data, model, args):
+def train_model(dataset, dev_data, model, args):
     if args.cuda:
         model = model.cuda()
     optimizer = torch.optim.Adam(model.parameters() , lr=args.lr)
     model.train()
 
+    best_epoch = 0
+    best_MAP = 0
     for epoch in range(1, args.epochs+1):
         print("-------------\nEpoch {}:\n".format(epoch))
-
+        # randomize new dataset each time
+        train_data = dataset.get_train_batches()
         loss = run_epoch(train_data, True, model, optimizer, args)
         print('Train max-margin loss: {:.6f}'.format( loss))
         print()
 
-        # Save model
-        torch.save(model, args.save_path+"_size"+str(args.num_hidden)+"_epoch"+str(epoch))
+        if epoch%2 == 1:
+            # Save model
+            torch.save(model, args.save_path+"_size"+str(args.num_hidden)+"_epoch"+str(epoch))
 
-        val_loss = run_epoch(dev_data, False, model, optimizer, args)
-        print('Val max-margin loss: {:.6f}'.format( val_loss))
+        # val_loss = run_epoch(dev_data, False, model, optimizer, args)
+        # print('Val max-margin loss: {:.6f}'.format( val_loss))
+        MAP, MRR = eval_model_two(dev_data, model, args)
+        if MAP > best_MAP:
+            best_MAP = MAP
+            best_epoch = epoch
+        print("Best EPOCH so far:", best_epoch, best_MAP)
 
     # save final model
-    torch.save(model, args.save_path+"_size"+str(args.num_hidden)+"_final")
+    # torch.save(model, args.save_path+"_size"+str(args.num_hidden)+"_final")
+    print("Best EPOCH:", best_epoch, best_MAP)
+
+def eval_model_two(data_batches, model, args):
+    if args.cuda:
+        model = model.cuda()
+
+    model.eval()
+    N = len(data_batches)
+    all_results = []
+    for i in xrange(N):
+        t, b, qlabels = data_batches[i]
+        assert qlabels[0] == -1
+        # print("lengths in eval", t.shape, b.shape, len(qlabels))
+        titles, bodies = autograd.Variable(t), autograd.Variable(b)
+        if args.cuda:
+            titles, bodies = titles.cuda(), bodies.cuda()
+        titles_encodings = F.normalize(model(titles))
+        bodies_encodings = F.normalize(model(bodies))
+        text_encodings = (titles_encodings + bodies_encodings) * 0.5
+        # Calculate Loss = Multi-Margin-Loss(train_group_ids, text_encodings)
+        scores = score_utils.batch_cosine_similarity_eval(text_encodings, cuda=args.cuda)
+        rankings = compile_rankings_eval(qlabels[1:], scores.cpu().data.numpy())
+        results = strip_ids_and_scores([rankings])
+        all_results += results
+    # print("all results", all_results)
+    precision_at_1 = eval_utils.precision_at_k(all_results, 1)
+    precision_at_5 = eval_utils.precision_at_k(all_results, 5)
+    MAP = eval_utils.mean_average_precision(all_results)
+    MRR = eval_utils.mean_reciprocal_rank(all_results)
+    print(tabulate([[MAP, MRR, precision_at_1, precision_at_5]], headers=['MAP', 'MRR', 'P@1', 'P@5']))   
+    return MAP, MRR 
 
 def eval_model(data_batches, model, args):
     if args.cuda:
@@ -57,8 +97,8 @@ def eval_model(data_batches, model, args):
         text_encodings = (titles_encodings + bodies_encodings) * 0.5
         # Calculate Loss = Multi-Margin-Loss(train_group_ids, text_encodings)
         scores, target_indices = score_utils.batch_cosine_similarity(text_encodings, train_group_ids, args.cuda)
-        loss = F.multi_margin_loss(scores, target_indices)
-        print("loss:", loss)
+        # loss = F.multi_margin_loss(scores, target_indices)
+        # print("loss:", loss)
         # Evaluation Metrics
         rankings = compile_rankings(train_group_ids, scores.cpu().data.numpy())
         results = strip_ids_and_scores(rankings)
@@ -69,6 +109,7 @@ def eval_model(data_batches, model, args):
     MAP = eval_utils.mean_average_precision(all_results)
     MRR = eval_utils.mean_reciprocal_rank(all_results)
     print(tabulate([[MAP, MRR, precision_at_1, precision_at_5]], headers=['MAP', 'MRR', 'P@1', 'P@5']))
+    return MAP, MRR
 
 
 def run_epoch(data_batches, is_training, model, optimizer, args):
@@ -83,6 +124,7 @@ def run_epoch(data_batches, is_training, model, optimizer, args):
     N = len(data_batches)
     all_train_group_ids = None
     all_scores = None
+    all_results = []
     for i in xrange(N):
         t, b, g = data_batches[i]
         train_group_ids = g
@@ -94,7 +136,6 @@ def run_epoch(data_batches, is_training, model, optimizer, args):
         if is_training:
             optimizer.zero_grad()
         # Encode all of the title and body text using model
-
         titles_encodings = F.normalize(model(titles))
         bodies_encodings = F.normalize(model(bodies))
         print("sizes of encodings", type(titles_encodings), titles_encodings.size(), bodies_encodings.size())
@@ -112,25 +153,42 @@ def run_epoch(data_batches, is_training, model, optimizer, args):
         losses.append(loss.cpu().data[0])
         print("BATCH LOSS "+str(i+1)+" out of "+str(N)+": ")
         print(loss.cpu().data[0])
+        rankings = compile_rankings(train_group_ids, scores.cpu().data.numpy())
+        results = strip_ids_and_scores(rankings)
+        all_results += results
         # Concat with cumulative vars for eval at end of epoch
-        if all_train_group_ids is None:
-            all_train_group_ids = train_group_ids
-        else:
-            all_train_group_ids = torch.cat(all_train_group_ids, train_group_ids)
-        if all_scores is None:
-            all_scores = scores
-        else:
-            all_scores = torch.cat(all_scores, scores)
+        # if all_train_group_ids is None:
+        #     all_train_group_ids = train_group_ids
+        # else:
+        #     all_train_group_ids = np.vstack((all_train_group_ids, train_group_ids))
+        # if all_scores is None:
+        #     all_scores = scores
+        # else:
+        #     all_scores = torch.cat((all_scores, scores))
     # Evaluation Metrics
-    rankings = compile_rankings(all_train_group_ids, all_scores.cpu().data)
-    results = strip_ids_and_scores(rankings)
-    precision_at_1 = eval_utils.precision_at_k(results, 1)
-    precision_at_5 = eval_utils.precision_at_k(results, 5)
-    MAP = eval_utils.mean_average_precision(results)
-    MRR = eval_utils.mean_reciprocal_rank(results)
+    precision_at_1 = eval_utils.precision_at_k(all_results, 1)
+    precision_at_5 = eval_utils.precision_at_k(all_results, 5)
+    MAP = eval_utils.mean_average_precision(all_results)
+    MRR = eval_utils.mean_reciprocal_rank(all_results)
     print(tabulate([[MAP, MRR, precision_at_1, precision_at_5]], headers=['MAP', 'MRR', 'P@1', 'P@5']))
+    # rankings = compile_rankings(all_train_group_ids, all_scores.cpu().data.numpy())
+    # results = strip_ids_and_scores(rankings)
+    # precision_at_1 = eval_utils.precision_at_k(results, 1)
+    # precision_at_5 = eval_utils.precision_at_k(results, 5)
+    # MAP = eval_utils.mean_average_precision(results)
+    # MRR = eval_utils.mean_reciprocal_rank(results)
+    # print(tabulate([[MAP, MRR, precision_at_1, precision_at_5]], headers=['MAP', 'MRR', 'P@1', 'P@5']))
     avg_loss = np.mean(losses)
     return avg_loss
+
+def compile_rankings_eval(qlabels, scores):
+    all_rankings = []
+    # print("sum of qlabels", sum(qlabels))
+    # print("shape of scores", scores.shape)
+    for i in range(len(qlabels)):
+        entry = (None, scores[i], qlabels[i])
+        all_rankings.append(entry)
+    return sorted(all_rankings, key=lambda x: x[1], reverse=True)
 
 def compile_rankings(train_group_ids, scores_variable):
     '''Compiles a list of lists ranking the queries by their scores

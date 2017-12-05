@@ -55,7 +55,12 @@ def mean_reciprocal_rank(results):
     '''
     mrr_terms = []
     for r in results:
-        mrr_terms.append(1.0 / (r.index(1) + 1))
+        # print("type r", type(r))
+        # assert type(r) == list
+        # if sum(r) > 0:
+        if 1 in r :
+            # print("we have one!!")
+            mrr_terms.append(1.0 / (r.index(1) + 1))
     mrr = 0
     if len(mrr_terms) > 0:
         mrr = sum(mrr_terms) / len(mrr_terms)

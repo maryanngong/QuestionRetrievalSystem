@@ -7,9 +7,9 @@ import torch.nn.functional as F
 def batch_cosine_similarity(encoded, training_ids, cuda=False):
     # encoded = encoded.data
     n = len(training_ids) # number of minibatches
-    print("type", type(training_ids), type(training_ids[0]))
+    # print("type", type(training_ids), type(training_ids[0]))
     all_scores = []
-    print("Cos Similarity")
+    # print("Cos Similarity")
     for i in range(n):
         minibatch_indices = training_ids[i]
         enc_query = encoded[minibatch_indices[0]]
@@ -33,3 +33,13 @@ def batch_cosine_similarity(encoded, training_ids, cuda=False):
     if cuda:
         target_indices = target_indices.cuda()
     return torch.cat(all_scores, 0).view(n, -1), target_indices 
+
+
+def batch_cosine_similarity_eval(encoded, cuda=False):
+    # print("shape of encoded", encoded.size())
+    enc_query = encoded[0]
+    enc_candidates = encoded[1:]
+    # print("num enc_cnadidates", len(enc_candidates))
+    similarity_scores = F.cosine_similarity(enc_query.view(1,-1), enc_candidates)
+    # print("shape of similarlity scores", similarity_scores.size())
+    return similarity_scores
