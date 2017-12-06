@@ -23,6 +23,7 @@ parser.add_argument('--num_workers', nargs='?', type=int, default=4, help='num w
 # model
 parser.add_argument('--model_name', nargs="?", type=str, default='dan', help="Form of model, i.e dan, rnn, etc.")
 parser.add_argument('--num_hidden', type=int, default=32, help="encoding size.")
+parser.add_argument('--dropout', type=float, default=0.0, help="dropout parameter")
 #cnn
 parser.add_argument('--num_channels', type=int, default=5, help="Number of channels for CNN model aka depth?")
 parser.add_argument('--filter_width', type=int, default=3, help="width dimension of CNN filter")
