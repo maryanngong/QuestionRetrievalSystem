@@ -17,7 +17,7 @@ parser = argparse.ArgumentParser(description='PyTorch Example Sentiment Classifi
 # learning
 parser.add_argument('--lr', type=float, default=0.001, help='initial learning rate [default: 0.001]')
 parser.add_argument('--epochs', type=int, default=256, help='number of epochs for train [default: 256]')
-parser.add_argument('--batch_size', type=int, default=128, help='batch size for training [default: 64]')
+parser.add_argument('--batch_size', type=int, default=32, help='batch size for training [default: 64]')
 # data loading
 parser.add_argument('--num_workers', nargs='?', type=int, default=4, help='num workers for data loader')
 # model
@@ -47,7 +47,10 @@ if __name__ == '__main__':
     for attr, value in sorted(args.__dict__.items()):
         print("\t{}={}".format(attr.upper(), value))
 
-    data = data_utils.Dataset()
+    use_cnn = False
+    if args.model_name == 'cnn3':
+        use_cnn=True
+    data = data_utils.Dataset(batch_size=args.batch_size, cnn=use_cnn)
 
     # model
     if args.snapshot is None:

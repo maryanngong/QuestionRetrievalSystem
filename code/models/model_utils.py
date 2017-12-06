@@ -26,8 +26,8 @@ def get_model(embeddings, args):
         return RNN(embeddings, args)
     elif args.model_name == 'lstm':
         return LSTM(embeddings, args)
-    elif args.model_name == 'lstm2':
-        return LSTM2(embeddings, args)
+    elif args.model_name == 'lstm2' or 'lstm_bi':
+        return LSTM_bi(embeddings, args)
     elif args.model_name == 'lstm3':
         return LSTM3(embeddings, args)
     else:
@@ -112,8 +112,6 @@ class CNN3(nn.Module):
         x = self.embedding_layer(x_indx)
         x =x.permute(0,2,1)
         out = self.conv1(x)
-        out = torch.sum(out, 2)
-        # print("size of out", out.size())
         return out
 
 
@@ -240,14 +238,12 @@ class LSTM3(nn.Module):
         batch_size = len(x_indx)
         h0, c0 = self.init_hidden_states(batch_size)
         output, (h_n, c_n) = self.rnn(all_x, (h0, c0))
-        # print("shape of output", output.size())
-        output = torch.sum(output, 1)
         return output
 
-class LSTM2(nn.Module):
+class LSTM_bi(nn.Module):
 
     def __init__(self, embeddings, args):
-        super(LSTM2, self).__init__()
+        super(LSTM_bi, self).__init__()
         self.args = args
         vocab_size, embed_dim = embeddings.shape
         self.embed_dim = embed_dim
@@ -271,8 +267,4 @@ class LSTM2(nn.Module):
         batch_size = len(x_indx)
         h0, c0 = self.init_hidden_states(batch_size)
         output, (h_n, c_n) = self.rnn(all_x, (h0, c0))
-        output = torch.mean(output, 1)
-        # print("lstm2 shape of output", output.size())
         return output
-        # out = self.W_o(h_n )
-        # return out

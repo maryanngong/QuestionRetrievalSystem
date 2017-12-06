@@ -7,25 +7,6 @@ import os
 import random
 
 
-def read_train_batches_from_file():
-    batches_filename = "train_batches.pkl"
-    with open(batches_filename, 'rb') as f:
-        batches = pickle.load(f)
-        return batches
-
-def read_test_batches_from_file():
-    batches_filename = "test_batches.pkl"
-    with open(batches_filename, 'rb') as f:
-        batches = pickle.load(f)
-        return batches
-
-def read_dev_batches_from_file():
-    batches_filename = "dev_batches.pkl"
-    with open(batches_filename, 'rb') as f:
-        batches = pickle.load(f)
-        return batches        
-
-
 def getEmbeddingTensor():
     embedding_path='../../askubuntu/vector/vectors_pruned.200.txt.gz'
     lines = []
@@ -47,47 +28,48 @@ def getEmbeddingTensor():
 def getIndicesTensor(text_arr, word_to_indx, max_length=100):
     nil_indx = 0
     text_indx = [ word_to_indx[x] if x in word_to_indx else nil_indx for x in text_arr][:max_length]
-    # if len(text_indx) < max_length:
-    #     text_indx.extend( [nil_indx for _ in range(max_length - len(text_indx))])
-
-    # x =  torch.LongTensor(text_indx)
     x = text_indx
 
     return x
 
-def map_corpus(raw_corpus, embedding_layer, max_len=100):
-    ids_corpus = { }
-    for id, pair in raw_corpus.iteritems():
-        item = (embedding_layer.map_to_ids(pair[0], filter_oov=True),
-                          embedding_layer.map_to_ids(pair[1], filter_oov=True)[:max_len])
-        #if len(item[0]) == 0:
-        #    say("empty title after mapping to IDs. Doc No.{}\n".format(id))
-        #    continue
-        ids_corpus[id] = item
-    return ids_corpus
-
-
 # taken from paper github (add proper citation)
-def create_one_batch(titles, bodies, padding_id, pad_left):
+def create_one_batch(titles, bodies, padding_id, pad_left, cnn=False):
     max_title_len = max(1, max(len(x) for x in titles))
     max_body_len = max(1, max(len(x) for x in bodies))
-    og_title_lens = [len(x) for x in titles]
-    og_body_lens = [len(x) for x in bodies]
+
+    if cnn:
+        mask_title = torch.zeros(len(titles), max_title_len-2)
+        mask_body = torch.zeros(len(bodies), max_body_len-2)
+    else:
+        mask_title = torch.zeros(len(titles), max_title_len)
+        mask_body = torch.zeros(len(bodies), max_body_len)
+    for i,x in enumerate(titles):
+        if len(x) > 0:
+            l = len(x)
+            # removing this because they still use part of the info from non padded,
+            # also getting error result of slicing is empty tensor error
+            # if cnn:
+            #     l -= 1
+            mask_title[i,:l] = 1.0 / max(1,l)
+    for i,x in enumerate(bodies):
+        if len(x) > 0:
+            l = len(x)
+            # if cnn:
+            #     l -= 1
+            mask_body[i,:l] = 1.0 / max(1,l)
     if pad_left:
         padded_titles = [ torch.from_numpy(np.pad(x,(max_title_len-len(x),0),'constant',
                                 constant_values=padding_id).astype(np.int64)) for x in titles]
         padded_bodies = [ torch.from_numpy(np.pad(x,(max_body_len-len(x),0),'constant',
                                 constant_values=padding_id).astype(np.int64)) for x in bodies]
-        # l = len(padded_titles[0])
-        return np.stack(padded_titles), np.stack(padded_bodies), og_title_lens, og_body_lens
+        return np.stack(padded_titles), np.stack(padded_bodies), mask_title, mask_body
     else:
         padded_titles = [ torch.from_numpy(np.pad(x,(0,max_title_len-len(x)),'constant',
                                 constant_values=padding_id).astype(np.int64)) for x in titles]
         padded_bodies = [ torch.from_numpy(np.pad(x,(0,max_body_len-len(x)),'constant',
                                 constant_values=padding_id).astype(np.int64)) for x in bodies]
-        # l = len(padded_titles[0])
-        return torch.stack(padded_titles), torch.stack(padded_bodies), og_title_lens, og_body_lens
-    return titles, bodies
+        return torch.stack(padded_titles), torch.stack(padded_bodies), mask_title, mask_body
+
 
 def create_hinge_batch(triples, train=True):
     if train:
@@ -163,27 +145,10 @@ def load_dataset():
     embedding_dim = embeddings.shape[1]
     print "embedding_dim", embedding_dim
 
-    # df_fname = "all_data.csv"
-    # dev_fname = "dev_ids.csv"
-    # train_fname = "train_ids.csv"
-    # test_fname = "test_ids.csv"
-    # if os.path.exists(df_fname) and os.path.exists(dev_fname) and os.path.exists(train_fname) and os.path.exists(test_fname):
-    #     # load these
-    #     train = pd.read_csv(train_fname)
-    #     dev = pd.read_csv(dev_fname)
-    #     test = pd.read_csv(test_fname)
-    #     dataframe = pd.read_csv(df_fname)
-    # else:
     dataframe = getTokenizedTextDataFrame(word_to_indx)
     train = getTrainingDataIds()
     dev = getDevTestDataIds('../../askubuntu/dev.txt')
     test = getDevTestDataIds('../../askubuntu/test.txt')
-
-        # # save for easy access later
-        # dataframe.to_csv(df_fname)
-        # train.to_csv(train_fname)
-        # dev.to_csv(dev_fname)
-        # test.to_csv(test_fname)
 
     return train, dev, test, dataframe, embeddings
 
@@ -211,7 +176,7 @@ def load_dataset():
 #   - candidate_ids: list of negative query ids
 #   - BM25: list of bm25 scores of candidate queries
 class Dataset():
-    def __init__(self, batch_size=64, debug_mode=False):
+    def __init__(self, batch_size=32, debug_mode=False, cnn=False):
         trainIds, devIds, testIds, allData, embeddings = load_dataset()
         self.train_batches_filename = "train_batches_2.pkl"
         self.dev_batches_filename = "dev_batches_2.pkl"
@@ -226,11 +191,12 @@ class Dataset():
         self.testData = None
         self.padding_id = 0 # get padding id from embeddings?
         self.pad_left = False
-        self.limit=19
+        self.limit=20
         self.batch_size = batch_size
         self.train_batches = None
         self.dev_batches = None
         self.test_batches = None
+        self.cnn = cnn
 
         self.get_train_data()
         self.get_test_data()
@@ -249,7 +215,6 @@ class Dataset():
         query_group['body'] = body
         similars = []
         for sim_id in query_group['similar_ids']:
-            # print "sim-id", sim_id
             similars.append(self.get_question_from_id(sim_id))
         query_group['similars'] = similars
         if data_type=='train':
@@ -257,7 +222,6 @@ class Dataset():
             for neg_id in query_group['negative_ids']:
                 negatives.append(self.get_question_from_id(neg_id))
             query_group['negatives'] = negatives
-            # return query, similars, negatives
         else:
             negatives = []
             for neg_id in query_group['candidate_ids']:
@@ -266,6 +230,7 @@ class Dataset():
         return query_group
 
     def get_train_batches(self, perm=None):
+        ### This code below is for saving train batches to file if you want to use the same one always...####
         # if self.train_batches is not None:
         #     print("returning train batches...")
         #     return self.train_batches
@@ -298,23 +263,18 @@ class Dataset():
             negative_ids = data.iloc[i]['negative_ids']
             positive_text_tokens = data.iloc[i]['similars']
             negative_text_tokens = data.iloc[i]['negatives']
-            # qids = data.iloc[i]['candidate_ids'] qlabels = data.iloc[i]
-            # if pid not in ids_corpus: continue
             cnt += 1
-            # print "positive_ids", type(positive_ids)
-            # print len(positive_ids)
-            for j,id in enumerate(positive_ids):# + negative_ids:
+
+            for j,id in enumerate(positive_ids):
                 if id not in id_to_index:
-                    # if id not in ids_corpus: continue
                     id_to_index[id] = len(titles)
                     title = positive_text_tokens[0][j]
                     body = positive_text_tokens[1][j]
                     titles.append(title)
                     bodies.append(body)
 
-            for j,id in enumerate(negative_ids):# + negative_ids:
+            for j,id in enumerate(negative_ids):
                 if id not in id_to_index:
-                    # if id not in ids_corpus: continue
                     id_to_index[id] = len(titles)
                     title = negative_text_tokens[0][j]
                     body = negative_text_tokens[1][j]
@@ -325,20 +285,16 @@ class Dataset():
             positive_indices = [id_to_index[p] for p in positive_ids]
             negative_indices = [id_to_index[p] for p in negative_ids]
 
-
-            # pid = pid2id[pid]
-            # pos = [ pid2id[q] for q, l in zip(qids, qlabels) if l == 1 and q in pid2id ]
-            # neg = [ pid2id[q] for q, l in zip(qids, qlabels) if l == 0 and q in pid2id ]
-            triples += [ [p_index, x] + negative_indices[:self.limit] for x in positive_indices ]
+            triples += [ [p_index, x] + random.sample(negative_indices, self.limit) for x in positive_indices ]
 
             padding_id = self.padding_id
             pad_left = self.pad_left
             if cnt == self.batch_size or u == N-1:
                 # assert len(titles) == len(bodies)
                 # assert max(id_to_index.values()) <= len(titles)
-                titles, bodies, title_lens, body_lens = create_one_batch(titles, bodies, padding_id, pad_left)
+                titles, bodies, t_mask, b_mask = create_one_batch(titles, bodies, padding_id, pad_left, cnn=self.cnn)
                 triples = create_hinge_batch(triples)
-                batches.append((titles, bodies, triples, title_lens, body_lens))
+                batches.append((titles, bodies, triples, t_mask, b_mask))
                 titles = [ ]
                 bodies = [ ]
                 triples = [ ]
@@ -383,8 +339,8 @@ class Dataset():
                 titles.append(negative_text_tokens[0][k])
                 bodies.append(negative_text_tokens[1][k])
             # print("length of title and bodies", len(titles), len(bodies))
-            titles, bodies, title_lens, body_lens = create_one_batch(titles, bodies, padding_id, pad_left)
-            lst.append((titles, bodies, np.array(qlabels, dtype="int32"), title_lens, body_lens))
+            titles, bodies, t_mask, b_mask = create_one_batch(titles, bodies, padding_id, pad_left, cnn=self.cnn)
+            lst.append((titles, bodies, np.array(qlabels, dtype="int32"), t_mask, b_mask))
         # with open(batches_filename, 'wb') as f:
         #     pickle.dump(lst, f)
         return lst
@@ -422,8 +378,8 @@ class Dataset():
                 titles.append(candidate_text_tokens[0][j])
                 bodies.append(candidate_text_tokens[1][j])
             # print("length of title and bodies", len(titles), len(bodies))
-            titles, bodies, title_lens, body_lens = create_one_batch(titles, bodies, padding_id, pad_left)
-            lst.append((titles, bodies, np.array(qlabels, dtype="int32"), title_lens, body_lens))
+            titles, bodies, t_mask, b_mask = create_one_batch(titles, bodies, padding_id, pad_left, cnn=self.cnn)
+            lst.append((titles, bodies, np.array(qlabels, dtype="int32"), t_mask, b_mask))
         # with open(batches_filename, 'wb') as f:
         #     pickle.dump(lst, f)
         return lst
