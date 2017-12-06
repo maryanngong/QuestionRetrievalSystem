@@ -64,24 +64,20 @@ def eval_model_two(data_batches, model, args):
         titles, bodies = autograd.Variable(t), autograd.Variable(b)
         if args.cuda:
             titles, bodies = titles.cuda(), bodies.cuda()
-        if args.model_name == 'lstm3' or args.model_name == 'cnn3' or args.model_name == 'lstm_bi':
-            if args.model_name == 'lstm3' or args.model_name == 'lstm_bi':
-                squeeze_dim = 2
-                sum_dim = 1
-            else: # cnn does need separate dimensions
-                squeeze_dim = 1
-                sum_dim = 2
-            t_mask = torch.autograd.Variable(t_mask.unsqueeze(squeeze_dim))
-            b_mask = torch.autograd.Variable(b_mask.unsqueeze(squeeze_dim))
-            if args.cuda:
-                t_mask = t_mask.cuda()
-                b_mask = b_mask.cuda()
-            titles_encodings = torch.sum(model(titles)*t_mask, sum_dim)
-            bodies_encodings = torch.sum(model(bodies)*b_mask, sum_dim)
-        else:
-            # print("doing the right one..")
-            titles_encodings = F.normalize(model(titles))
-            bodies_encodings = F.normalize(model(bodies))
+        if 'lstm' in args.model_name:
+            squeeze_dim = 2
+            sum_dim = 1
+        else: # cnn does need separate dimensions
+            squeeze_dim = 1
+            sum_dim = 2
+        t_mask = torch.autograd.Variable(t_mask.unsqueeze(squeeze_dim))
+        b_mask = torch.autograd.Variable(b_mask.unsqueeze(squeeze_dim))
+        if args.cuda:
+            t_mask = t_mask.cuda()
+            b_mask = b_mask.cuda()
+        titles_encodings = torch.sum(model(titles)*t_mask, sum_dim)
+        bodies_encodings = torch.sum(model(bodies)*b_mask, sum_dim)
+
         text_encodings = (titles_encodings + bodies_encodings) * 0.5
         # Calculate Loss = Multi-Margin-Loss(train_group_ids, text_encodings)
         scores = score_utils.batch_cosine_similarity_eval(text_encodings, cuda=args.cuda)
@@ -120,24 +116,20 @@ def run_epoch(data_batches, is_training, model, optimizer, args):
         if is_training:
             optimizer.zero_grad()
         # Encode all of the title and body text using model
-        if args.model_name == 'lstm3' or args.model_name == 'cnn3' or args.model_name == 'lstm_bi':
-            squeeze_dim = 2
-            sum_dim = 1
-            if args.model_name == 'cnn3':
-                squeeze_dim = 1
-                sum_dim = 2
-            t_mask = torch.autograd.Variable(t_mask.unsqueeze(squeeze_dim))
-            b_mask = torch.autograd.Variable(b_mask.unsqueeze(squeeze_dim))
-            if args.cuda:
-                t_mask = t_mask.cuda()
-                b_mask = b_mask.cuda()
-            encode_titles = model(titles)
-            encode_bodies = model(bodies)
-            titles_encodings = torch.sum(encode_titles*t_mask, sum_dim)
-            bodies_encodings = torch.sum(encode_bodies*b_mask, sum_dim)
-        else:
-            titles_encodings = F.normalize(model(titles))
-            bodies_encodings = F.normalize(model(bodies))
+        squeeze_dim = 2
+        sum_dim = 1
+        if 'cnn' in args.model_name:
+            squeeze_dim = 1
+            sum_dim = 2
+        t_mask = torch.autograd.Variable(t_mask.unsqueeze(squeeze_dim))
+        b_mask = torch.autograd.Variable(b_mask.unsqueeze(squeeze_dim))
+        if args.cuda:
+            t_mask = t_mask.cuda()
+            b_mask = b_mask.cuda()
+        encode_titles = model(titles)
+        encode_bodies = model(bodies)
+        titles_encodings = torch.sum(encode_titles*t_mask, sum_dim)
+        bodies_encodings = torch.sum(encode_bodies*b_mask, sum_dim)
 
         text_encodings = (titles_encodings + bodies_encodings) * 0.5
         # Calculate Loss = Multi-Margin-Loss(train_group_ids, text_encodings)

@@ -48,7 +48,7 @@ if __name__ == '__main__':
         print("\t{}={}".format(attr.upper(), value))
 
     use_cnn = False
-    if args.model_name == 'cnn3':
+    if 'cnn' in args.model_name:
         use_cnn=True
     data = data_utils.Dataset(batch_size=args.batch_size, cnn=use_cnn)
 
