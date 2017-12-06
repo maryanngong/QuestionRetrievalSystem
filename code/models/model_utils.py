@@ -105,12 +105,12 @@ class CNN3(nn.Module):
 
         self.conv1 = nn.Conv1d(embed_dim, args.num_hidden, kernel_size=3)
         # self.pool1 = nn.AvgPool1d()
-
-
+        self.dropout = nn.Dropout(p=args.dropout)
 
     def forward(self, x_indx):
         x = self.embedding_layer(x_indx)
         x =x.permute(0,2,1)
+        x = self.dropout(x)
         out = self.conv1(x)
         return out
 
