@@ -38,7 +38,7 @@ def train_model(dataset, dev_data, test_data, model, args, perm=False):
         MAP, MRR = eval_model_two(dev_data, model, args)
         print()
         print("Test data Performance")
-        eval_model_two(dev_data, model, args)
+        eval_model_two(test_data, model, args)
         print()
 
         # save model each epoch
