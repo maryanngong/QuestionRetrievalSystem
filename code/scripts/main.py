@@ -67,11 +67,11 @@ if __name__ == '__main__':
     print()
     # train
     if args.train :
-        train_utils.train_model(data, data.create_eval_batches('dev'), model, args)
+        train_utils.train_model(data, data.create_eval_batches('dev'), data.create_eval_batches('test'), model, args)
     else:
         print("Evaluating performance on train data...")
         train_utils.eval_model_two(data.create_eval_batches_train(), model, args)
-        # print()
+        print()
         print("Evaluating performance on dev data...")
         train_utils.eval_model_two(data.create_eval_batches("dev"), model, args)
         print()

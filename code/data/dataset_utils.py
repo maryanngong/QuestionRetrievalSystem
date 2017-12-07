@@ -6,7 +6,8 @@ import pandas as pd
 import os
 import random
 
-
+# Helper function that constructs embedding tensor and word_to_indx mapping
+# this code is adapted from Adam Yala's example project github
 def getEmbeddingTensor():
     embedding_path='../../askubuntu/vector/vectors_pruned.200.txt.gz'
     lines = []
@@ -25,14 +26,25 @@ def getEmbeddingTensor():
     embedding_tensor = np.array(embedding_tensor, dtype=np.float32)
     return embedding_tensor, word_to_indx
 
+# Helper function that constructs and index tensor given the list of text tokens
 def getIndicesTensor(text_arr, word_to_indx, max_length=100):
     nil_indx = 0
     text_indx = [ word_to_indx[x] if x in word_to_indx else nil_indx for x in text_arr][:max_length]
     x = text_indx
-
     return x
 
-# taken from paper github (add proper citation)
+# Creates and pads one batch of data ready for training
+# Parameters:
+#   - titles: list of title index tokens
+#   - bodies: list of body index tokens
+#   - padding_id: index to use for padding
+#   - pad_left: boolean flag whether to pad on left or right of sequence
+#   - cnn: boolean flag whether this batch is to be used in cnn, if so, then the masking layer is constructed differently
+# Returns:
+#   - titles tensor that has been padded to same size
+#   - bodies tensor that has been padded to same size but truncated at 100 sequence length
+#   - masking matrix for title
+#   - masking matrix for body
 def create_one_batch(titles, bodies, padding_id, pad_left, cnn=False):
     max_title_len = max(1, max(len(x) for x in titles))
     max_body_len = max(1, max(len(x) for x in bodies))
@@ -70,7 +82,9 @@ def create_one_batch(titles, bodies, padding_id, pad_left, cnn=False):
                                 constant_values=padding_id).astype(np.int64)) for x in bodies]
         return torch.stack(padded_titles), torch.stack(padded_bodies), mask_title, mask_body
 
-
+# formats training ids and pads by repeating the last question id until it meets the max length so that all
+# training groups have the same number of samples wehn the flag train is set to true
+# otherwise, these training ids are not padded and are allowed to be different lengths
 def create_hinge_batch(triples, train=True):
     if train:
         max_len = max(len(x) for x in triples)
@@ -154,10 +168,13 @@ def load_dataset():
 
 # Dataset class
 # On intiialization this dataset loads the data from file
-# To access the training, dev, or test sets of data, call the following functions:
-#   get_train_data()
-#   get_dev_data()
-#   get_test_data()
+# To access the training data in batches form, call:
+#   get_train_batches()
+# To access the training data, dev data, or test data for evaluation, call:
+#   create_eval_batches_train()
+#   create_eval_batches("dev")
+#   create_eval_batches("test")
+#
 # The first time these funcitons are ever called, they will need to parse the data into the correct format before returning, so it may take a while
 # but after parsing, it writes to file and all subsequent calls can just read from file (much faster)
 # Train data will be returned in the format of a pandas dataframe indexed by query id with the following columns:
@@ -205,10 +222,12 @@ class Dataset():
     def get_embeddings(self):
         return self.embeddings
 
+    # given question id, returns the title text tokens and body text tokens
     def get_question_from_id(self, query_id):
         query = self.allData.loc[query_id]
         return query['title'], query['body']
 
+    # helper function to construct minibatch of questions, mapping question ids to actual text tokens
     def convertGroupings(self, query_group, data_type='train'):
         title, body = self.get_question_from_id(query_group['id'])
         query_group['title'] = title
@@ -229,8 +248,19 @@ class Dataset():
             query_group['candidates'] = negatives
         return query_group
 
-    def get_train_batches(self, perm=None):
-        ### This code below is for saving train batches to file if you want to use the same one always...####
+    # This function is adapted from Tao Lei's github
+    # Constructs batches of data for training of model
+    # Permutes the data so that each call to get_train_batches will return different question groups.
+    # Formats the data into groups of self.batch_size, where each group has self.batch_size minibatches
+    # Returns list of batches
+    #   - each batch consists of a tuple of (titles, bodies, triples, t_mask, b_mask)
+    #       - titles: titles of all questions in batch
+    #       - bodies: bodies of all questions in batch
+    #       - triples: training group ids organized into minibatches
+    #       - t_mask: masking matrix for titles
+    #       - b_mask: masking matrix for bodies
+    def get_train_batches(self):
+        ### This code below is for saving train batches to file if you want to use the same one always ####
         # if self.train_batches is not None:
         #     print("returning train batches...")
         #     return self.train_batches
@@ -241,9 +271,9 @@ class Dataset():
         #         batches = pickle.load(f)
         #     return batches
         data = self.trainData
-        if perm is None:
-            perm = range(len(data))
-            random.shuffle(perm)
+        # generate permutation of data order
+        perm = range(len(data))
+        random.shuffle(perm)
 
         N = len(data)
         cnt = 0
@@ -290,8 +320,6 @@ class Dataset():
             padding_id = self.padding_id
             pad_left = self.pad_left
             if cnt == self.batch_size or u == N-1:
-                # assert len(titles) == len(bodies)
-                # assert max(id_to_index.values()) <= len(titles)
                 titles, bodies, t_mask, b_mask = create_one_batch(titles, bodies, padding_id, pad_left, cnn=self.cnn)
                 triples = create_hinge_batch(triples)
                 batches.append((titles, bodies, triples, t_mask, b_mask))
@@ -301,11 +329,19 @@ class Dataset():
                 pid2id = {}
                 id_to_index = {}
                 cnt = 0
-        # with open(batches_filename, 'wb') as f:
-        #     print("pickle dumping train batches...")
-        #     pickle.dump(batches, f)
         return batches
 
+    # This function is adapted from Tao Lei's github
+    # Constructs batches of data for evaluation of model using the training data
+    # Formats the data into groups of self.batch_size, where each group has self.batch_size minibatches
+    # Uses only a subset of the training data, truncates to the first 100 samples, and only 30 questions for minibatch group
+    # Returns batches of one minibatch each. Each minibatch begins with the query question, followed by the candidate questions
+    #   - each minibatch consists of a tuple of (titles, bodies, qlabels, t_mask, b_mask)
+    #       - titles: titles of all questions in batch
+    #       - bodies: bodies of all questions in batch
+    #       - qlabels: indicator representing whether the aligned question is positive (1) or negative (0). (-1) is used for the query question 
+    #       - t_mask: masking matrix for titles
+    #       - b_mask: masking matrix for bodies
     def create_eval_batches_train(self):
         data = self.trainData
         padding_id = self.padding_id
@@ -325,36 +361,34 @@ class Dataset():
             negative_text_tokens = data.iloc[i]['negatives']
             qlabels = [-1] + [1 for j in positive_ids] + [0 for j in negative_ids]
             qlabels = qlabels[:30]
-            cnt = 1
             for k in range(len(positive_ids)):
                 if len(titles) >= 30:
                     break
                 titles.append(positive_text_tokens[0][k])
                 bodies.append(positive_text_tokens[1][k])
-                # cnt += 1
 
             for k in range(len(negative_ids)):
                 if len(titles) >= 30:
                     break
                 titles.append(negative_text_tokens[0][k])
                 bodies.append(negative_text_tokens[1][k])
-            # print("length of title and bodies", len(titles), len(bodies))
             titles, bodies, t_mask, b_mask = create_one_batch(titles, bodies, padding_id, pad_left, cnn=self.cnn)
             lst.append((titles, bodies, np.array(qlabels, dtype="int32"), t_mask, b_mask))
-        # with open(batches_filename, 'wb') as f:
-        #     pickle.dump(lst, f)
         return lst
 
+    # This function is adapted from Tao Lei's github
+    # Constructs batches of data for evaluation of model using either dev or test data
+    # Formats the data into groups of self.batch_size, where each group has self.batch_size minibatches
+    # Parameters:
+    #   - data_set: string representing dataset type "test" or "dev"
+    # Returns batches of one minibatch each. Each minibatch begins with the query question, followed by the candidate questions
+    #   - each minibatch consists of a tuple of (titles, bodies, qlabels, t_mask, b_mask)
+    #       - titles: titles of all questions in batch
+    #       - bodies: bodies of all questions in batch
+    #       - qlabels: indicator representing whether the aligned question is positive (1) or negative (0). (-1) is used for the query question 
+    #       - t_mask: masking matrix for titles
+    #       - b_mask: masking matrix for bodies
     def create_eval_batches(self, data_set):
-        if "test" in data_set:
-            batches_filename = self.test_batches_filename
-        else:
-            batches_filename = self.dev_batches_filename
-        # if os.path.exists(batches_filename):
-        #     print("reading batches from file...")
-        #     with open(batches_filename, 'rb') as f:
-        #         batches = pickle.load(f)
-        #     return batches
         if "test" in data_set:
             data = self.testData
         else:
@@ -371,191 +405,15 @@ class Dataset():
             positive_ids_set = set(data.iloc[i]['similar_ids'])
             candidate_ids = data.iloc[i]['candidate_ids']
             candidate_text_tokens = data.iloc[i]['candidates']
-            # print("length of candidate_ids", len(candidate_ids), len(candidate_text_tokens))
             qlabels = [-1] + [int(c_id in positive_ids_set) for c_id in candidate_ids]
-            # print("sum of qlabels", sum(qlabels))
             for j in range(len(candidate_ids)):
                 titles.append(candidate_text_tokens[0][j])
                 bodies.append(candidate_text_tokens[1][j])
-            # print("length of title and bodies", len(titles), len(bodies))
             titles, bodies, t_mask, b_mask = create_one_batch(titles, bodies, padding_id, pad_left, cnn=self.cnn)
             lst.append((titles, bodies, np.array(qlabels, dtype="int32"), t_mask, b_mask))
-        # with open(batches_filename, 'wb') as f:
-        #     pickle.dump(lst, f)
         return lst
 
-    def get_test_batches(self, perm=None):
-        if self.test_batches is not None:
-            print("returning test batches...")
-            return self.test_batches
-        batches_filename = self.test_batches_filename
-        if os.path.exists(batches_filename):
-            print("reading test batches from file...")
-            with open(batches_filename, 'rb') as f:
-                batches = pickle.load(f)
-            return batches
-        data = self.testData
-        if perm is None:
-            perm = range(len(data))
-            # random.shuffle(perm)
-
-        N = len(data)
-        cnt = 0
-        id_to_index = {}
-        titles = [ ]
-        bodies = [ ]
-        triples = [ ]
-        batches = [ ]
-        for u in xrange(N):
-            i = perm[u]
-            pid = data.iloc[i]['id']
-            if pid not in id_to_index:
-                id_to_index[pid] = len(titles)
-                titles.append(data.iloc[i]['title'])
-                bodies.append(data.iloc[i]['body'])
-            positive_ids = data.iloc[i]['similar_ids']
-            positive_ids_set = set(positive_ids)
-            candidate_ids = data.iloc[i]['candidate_ids']
-            candidate_text_tokens = data.iloc[i]['candidates']
-            negative_ids = []
-
-            cnt += 1
-            # print "positive_ids", type(positive_ids)
-            # print len(positive_ids)
-            for j,id in enumerate(candidate_ids):# + negative_ids:
-                if id not in id_to_index:
-                    # if id not in ids_corpus: continue
-                    id_to_index[id] = len(titles)
-                    title = candidate_text_tokens[0][j]
-                    body = candidate_text_tokens[1][j]
-                    titles.append(title)
-                    bodies.append(body)
-
-                    if id not in positive_ids_set:
-                        negative_ids.append(id)
-
-
-            p_index = id_to_index[pid]
-            positive_indices = [id_to_index[p] for p in positive_ids]
-            negative_indices = [id_to_index[p] for p in negative_ids]
-
-            triples += [ [p_index, x] + negative_indices for x in positive_indices ]
-
-            padding_id = self.padding_id
-            pad_left = self.pad_left
-            if cnt == self.batch_size or u == N-1:
-                # assert len(titles) == len(bodies)
-                # assert max(id_to_index.values()) <= len(titles)
-                titles, bodies, _, _ = create_one_batch(titles, bodies, padding_id, pad_left)
-                triples = create_hinge_batch(triples, train=False)
-                batches.append((titles, bodies, triples))
-                titles = [ ]
-                bodies = [ ]
-                triples = [ ]
-                pid2id = {}
-                id_to_index = {}
-                cnt = 0
-        with open(batches_filename, 'wb') as f:
-            print("pickle dumping test batches...")
-            pickle.dump(batches, f)
-        return batches
-
-    def get_dev_batches(self, perm=None, debug=False):
-        if not debug:
-            if self.dev_batches is not None:
-                print("returning dev batches...")
-                return self.dev_batches
-            batches_filename = self.dev_batches_filename
-            if os.path.exists(batches_filename):
-                print("reading dev batches from file...")
-                with open(batches_filename, 'rb') as f:
-                    batches = pickle.load(f)
-                return batches
-        print("generating dev batches...")
-        data = self.devData
-        if perm is None:
-            perm = range(len(data))
-            # random.shuffle(perm)
-
-        N = len(data)
-        cnt = 0
-        id_to_index = {}
-        titles = [ ]
-        bodies = [ ]
-        triples = [ ]
-        batches = [ ]
-        for u in xrange(N):
-            i = perm[u]
-            pid = data.iloc[i]['id']
-            if pid not in id_to_index:
-                id_to_index[pid] = len(titles)
-                titles.append(data.iloc[i]['title'])
-                bodies.append(data.iloc[i]['body'])
-            positive_ids = data.iloc[i]['similar_ids']
-            positive_ids_set = set(positive_ids)
-            candidate_ids = data.iloc[i]['candidate_ids']
-            candidate_text_tokens = data.iloc[i]['candidates']
-            negative_ids = []
-            # print("lenghts of candidate ids and positive ids", len(candidate_ids), len(positive_ids))
-            # negative_ids = data.iloc[i]['negative_ids']
-            # positive_text_tokens = data.iloc[i]['similars']
-            # negative_text_tokens = data.iloc[i]['negatives']
-            # qids = data.iloc[i]['candidate_ids'] qlabels = data.iloc[i]
-            # if pid not in ids_corpus: continue
-            cnt += 1
-            # print "positive_ids", type(positive_ids)
-            # print len(positive_ids)
-            for j,id in enumerate(candidate_ids):# + negative_ids:
-                if id not in id_to_index:
-                    # if id not in ids_corpus: continue
-                    id_to_index[id] = len(titles)
-                    title = candidate_text_tokens[0][j]
-                    body = candidate_text_tokens[1][j]
-                    titles.append(title)
-                    bodies.append(body)
-
-                    if id not in positive_ids_set:
-                        negative_ids.append(id)
-
-            # for j,id in enumerate(negative_ids):# + negative_ids:
-            #     if id not in id_to_index:
-            #         # if id not in ids_corpus: continue
-            #         id_to_index[id] = len(titles)
-            #         title = negative_text_tokens[0][j]
-            #         body = negative_text_tokens[1][j]
-            #         titles.append(title)
-            #         bodies.append(body)
-
-            p_index = id_to_index[pid]
-            positive_indices = [id_to_index[p] for p in positive_ids]
-            negative_indices = [id_to_index[p] for p in negative_ids]
-            # print("length of positive indices and negative indices", len(positive_indices), len(negative_indices))
-
-            # pid = pid2id[pid]
-            # pos = [ pid2id[q] for q, l in zip(qids, qlabels) if l == 1 and q in pid2id ]
-            # neg = [ pid2id[q] for q, l in zip(qids, qlabels) if l == 0 and q in pid2id ]
-            triples += [ [p_index, x] + negative_indices for x in positive_indices ]
-
-            padding_id = self.padding_id
-            pad_left = self.pad_left
-            if cnt == self.batch_size or u == N-1:
-                # assert len(titles) == len(bodies)
-                # assert max(id_to_index.values()) <= len(titles)
-                titles, bodies, _, _ = create_one_batch(titles, bodies, padding_id, pad_left)
-                triples = create_hinge_batch(triples, train=False)
-                batches.append((titles, bodies, triples))
-                titles = [ ]
-                bodies = [ ]
-                triples = [ ]
-                pid2id = {}
-                id_to_index = {}
-                cnt = 0
-        if not debug:
-            with open(batches_filename, 'wb') as f:
-                print("pickle dumping dev batches...")
-                pickle.dump(batches, f)
-        return batches
-
+    # Helper function for fetching the embedded training data dataframe
     def get_train_data(self):
         train_data_file = "train_embedded_dataframe.pkl"
         if self.trainData is not None or os.path.exists(train_data_file):
@@ -574,6 +432,7 @@ class Dataset():
         self.trainData = train_df
         return train_df
 
+    # Helper function for fetching the embedded dev data dataframe
     def get_dev_data(self):
         dev_data_file = "dev_embedded_dataframe.pkl"
         if self.devData is not None or os.path.exists(dev_data_file):
@@ -591,6 +450,7 @@ class Dataset():
         self.devData = dev_df
         return dev_df
 
+    # Helper function for fetching the embedded test data dataframe
     def get_test_data(self):
         test_data_file = "test_embedded_dataframe.pkl"
         if self.testData is not None or os.path.exists(test_data_file):
@@ -610,18 +470,4 @@ class Dataset():
 if __name__ == '__main__':
     dataset = Dataset()
     dev = dataset.create_eval_batches('dev')
-    # dev = dataset.get_dev_batches()
-    # train = dataset.get_train_batches()
-    # test = dataset.get_test_batches()
-    # print("lengths", len(train), len(dev), len(test))
-    # for i in range(5):
-    #     print("train")
-    #     tr_t, tr_b, tr_g = train[i]
-    #     print(tr_t.shape, tr_b.shape, len(tr_g[0]))
-    #     print("dev")
-    #     tr_t, tr_b, tr_g = dev[i]
-    #     print(tr_t.shape, tr_b.shape, len(tr_g[0]))
-    #     print("test")
-    #     tr_t, tr_b, tr_g = test[i]
-    #     print(tr_t.shape, tr_b.shape, len(tr_g[0]))
 

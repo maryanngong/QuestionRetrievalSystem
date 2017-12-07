@@ -12,7 +12,9 @@ import numpy as np
 import score_utils as score_utils
 import evaluation_utils as eval_utils
 
-def train_model(dataset, dev_data, model, args, perm=False):
+# Trains model, takes a permutation flag. If perm=True, then it
+# regenerates training batch data every epoch, which permutes the data order
+def train_model(dataset, dev_data, test_data, model, args, perm=False):
     if args.cuda:
         model = model.cuda()
     optimizer = torch.optim.Adam(model.parameters() , lr=args.lr)
@@ -22,7 +24,7 @@ def train_model(dataset, dev_data, model, args, perm=False):
         train_data = dataset.get_train_batches()
 
     best_epoch = 0
-    best_MAP = 0
+    best_MRR = 0
     for epoch in range(1, args.epochs+1):
         print("-------------\nEpoch {}:\n".format(epoch))
         # randomize new dataset each time
@@ -32,24 +34,29 @@ def train_model(dataset, dev_data, model, args, perm=False):
         print('Train max-margin loss: {:.6f}'.format( loss))
         print()
 
-        if epoch % 2 == 1:
-            torch.save(model, args.save_path+"_size"+str(args.num_hidden)+"_epoch"+str(epoch))
-
-        # val_loss = run_epoch(dev_data, False, model, optimizer, args)
-        # print('Val max-margin loss: {:.6f}'.format( val_loss))
         print("Dev data Performance")
         MAP, MRR = eval_model_two(dev_data, model, args)
-        if MAP > best_MAP:
-            best_MAP = MAP
+        print()
+        print("Test data Performance")
+        eval_model_two(dev_data, model, args)
+        print()
+
+        # save model each epoch
+        torch.save(model, args.save_path+"_size"+str(args.num_hidden)+"_epoch"+str(epoch)) 
+
+        # also save best model seen so far according to dev MRR score
+        if MRR > best_MRR:
+            best_MRR = MRR
             best_epoch = epoch
             # Save model
             torch.save(model, args.save_path+"_size"+str(args.num_hidden)+"_epoch_best")
-        print("Best EPOCH so far:", best_epoch, best_MAP)
 
-    # save final model
-    # torch.save(model, args.save_path+"_size"+str(args.num_hidden)+"_final")
-    print("Best EPOCH:", best_epoch, best_MAP)
+        print("Best EPOCH so far:", best_epoch, best_MRR)
 
+    print("Best EPOCH:", best_epoch, best_MRR)
+
+# Evaluates the model using the defined metrics on the given dataset.
+# NOTE: data_batches must be in the evaluation batch format. See dataset_utils create_eval_batches* functions
 def eval_model_two(data_batches, model, args):
     if args.cuda:
         model = model.cuda()
@@ -59,11 +66,12 @@ def eval_model_two(data_batches, model, args):
     all_results = []
     for i in xrange(N):
         t, b, qlabels, t_mask, b_mask = data_batches[i]
+        # checks that the first question is the query question. Query question has label -1
         assert qlabels[0] == -1
-        # print("lengths in eval", t.shape, b.shape, len(qlabels))
         titles, bodies = autograd.Variable(t), autograd.Variable(b)
         if args.cuda:
             titles, bodies = titles.cuda(), bodies.cuda()
+        # specify squeeze dimensions according to type of model
         if 'lstm' in args.model_name:
             squeeze_dim = 2
             sum_dim = 1
@@ -84,7 +92,7 @@ def eval_model_two(data_batches, model, args):
         rankings = compile_rankings_eval(qlabels[1:], scores.cpu().data.numpy())
         results = strip_ids_and_scores([rankings])
         all_results += results
-    # print("all results", all_results)
+
     precision_at_1 = eval_utils.precision_at_k(all_results, 1)
     precision_at_5 = eval_utils.precision_at_k(all_results, 5)
     MAP = eval_utils.mean_average_precision(all_results)
@@ -112,10 +120,11 @@ def run_epoch(data_batches, is_training, model, optimizer, args):
         # Train Group IDs are the IDs of data samples where each sample is (query, positive examples, negative examples)
         titles, bodies = autograd.Variable(t), autograd.Variable(b)
         if args.cuda:
-            titles, bodies = titles.cuda(), bodies.cuda() #, train_group_ids.cuda() <-- i don't think this needs to be a cuda variable
+            titles, bodies = titles.cuda(), bodies.cuda()
         if is_training:
             optimizer.zero_grad()
         # Encode all of the title and body text using model
+        # squeeze dimension differs for lstm and cnn models
         squeeze_dim = 2
         sum_dim = 1
         if 'cnn' in args.model_name:
@@ -134,10 +143,7 @@ def run_epoch(data_batches, is_training, model, optimizer, args):
         text_encodings = (titles_encodings + bodies_encodings) * 0.5
         # Calculate Loss = Multi-Margin-Loss(train_group_ids, text_encodings)
         scores, target_indices = score_utils.batch_cosine_similarity(text_encodings, train_group_ids, args.cuda)
-        # print('SHAPE SCORES:')
-        # print(scores.data.shape)
-        # print('SHAPE TARGET_INDICES:')
-        # print(target_indices.data.shape)
+
         loss = F.multi_margin_loss(scores, target_indices)
         if is_training:
             loss.backward()
@@ -148,35 +154,20 @@ def run_epoch(data_batches, is_training, model, optimizer, args):
         rankings = compile_rankings(train_group_ids, scores.cpu().data.numpy())
         results = strip_ids_and_scores(rankings)
         all_results += results
-        # Concat with cumulative vars for eval at end of epoch
-        # if all_train_group_ids is None:
-        #     all_train_group_ids = train_group_ids
-        # else:
-        #     all_train_group_ids = np.vstack((all_train_group_ids, train_group_ids))
-        # if all_scores is None:
-        #     all_scores = scores
-        # else:
-        #     all_scores = torch.cat((all_scores, scores))
+
     # Evaluation Metrics
     precision_at_1 = eval_utils.precision_at_k(all_results, 1)
     precision_at_5 = eval_utils.precision_at_k(all_results, 5)
     MAP = eval_utils.mean_average_precision(all_results)
     MRR = eval_utils.mean_reciprocal_rank(all_results)
     print(tabulate([[MAP, MRR, precision_at_1, precision_at_5]], headers=['MAP', 'MRR', 'P@1', 'P@5']))
-    # rankings = compile_rankings(all_train_group_ids, all_scores.cpu().data.numpy())
-    # results = strip_ids_and_scores(rankings)
-    # precision_at_1 = eval_utils.precision_at_k(results, 1)
-    # precision_at_5 = eval_utils.precision_at_k(results, 5)
-    # MAP = eval_utils.mean_average_precision(results)
-    # MRR = eval_utils.mean_reciprocal_rank(results)
-    # print(tabulate([[MAP, MRR, precision_at_1, precision_at_5]], headers=['MAP', 'MRR', 'P@1', 'P@5']))
     avg_loss = np.mean(losses)
     return avg_loss
 
+# same as compile_rankings function except it already has positive and negative labels passed as qlabels
+# also only handles one minibatch
 def compile_rankings_eval(qlabels, scores):
     all_rankings = []
-    # print("sum of qlabels", sum(qlabels))
-    # print("shape of scores", scores.shape)
     for i in range(len(qlabels)):
         entry = (None, scores[i], qlabels[i])
         all_rankings.append(entry)
