@@ -91,7 +91,7 @@ class CNN3(nn.Module):
         x =x.permute(0,2,1)
         # x = self.dropout(x)
         # Trying functional dropout (bc it doesnt need to be trained) with training flag set properly
-        x = F.dropout(x, p=args.dropout, training=self.training)
+        x = F.dropout(x, p=self.args.dropout, training=self.training)
         out = self.conv1(x)
         return out
 
