@@ -22,12 +22,15 @@ def batch_cosine_similarity(encoded, training_ids, cuda=False):
     all_scores = []
     for i in range(n):
         minibatch_indices = training_ids[i]
+        # print("minibatch indices")
+        # print(minibatch_indices)
         enc_query = encoded[minibatch_indices[0]]
         pos_id = minibatch_indices[1]
         negative_ids = minibatch_indices[2:]
         candidate_ids = minibatch_indices[1:]
+        # print(candidate_ids)
 
-        select_indices = autograd.Variable(torch.LongTensor(candidate_ids))
+        select_indices = autograd.Variable(torch.LongTensor(candidate_ids), requires_grad=False)
         if cuda:
             select_indices = select_indices.cuda()
         enc_candidates = encoded.index_select(0, select_indices)

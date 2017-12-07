@@ -2,7 +2,6 @@ import argparse
 import sys
 from os.path import dirname, realpath
 sys.path.append(dirname(dirname(realpath(__file__))))
-import data.dataset_utils as data_utils
 import models.model_utils as model_utils
 import train.train_utils as train_utils
 import os
@@ -10,6 +9,7 @@ import torch
 import datetime
 import cPickle as pickle
 import pdb
+import data.myio as myio
 
 
 
@@ -24,6 +24,7 @@ parser.add_argument('--num_workers', nargs='?', type=int, default=4, help='num w
 parser.add_argument('--model_name', nargs="?", type=str, default='dan', help="Form of model, i.e dan, rnn, etc.")
 parser.add_argument('--num_hidden', type=int, default=32, help="encoding size.")
 parser.add_argument('--dropout', type=float, default=0.0, help="dropout parameter")
+parser.add_argument('--margin', type=float, default=1.0)
 #cnn
 parser.add_argument('--num_channels', type=int, default=5, help="Number of channels for CNN model aka depth?")
 parser.add_argument('--filter_width', type=int, default=3, help="width dimension of CNN filter")
@@ -34,9 +35,9 @@ parser.add_argument('--cuda_device', type=int, default=0, help='specify GPU numb
 parser.add_argument('--train', action='store_true', default=False, help='enable train')
 # task
 parser.add_argument('--snapshot', type=str, default=None, help='filename of model snapshot to load[default: None]')
-parser.add_argument('--save_path', type=str, default="model.pt", help='Path where to dump model')
-# debugging
-parser.add_argument('--debug_mode', action='store_true', default=False, help='debugging mode so work with way less data')
+parser.add_argument('--save_path', type=str, default="", help='Path where to dump model')
+
+parser.add_argument('--corpus', type=str, default='../../askubuntu/text_tokenized.txt.gz')
 
 args = parser.parse_args()
 
@@ -48,14 +49,13 @@ if __name__ == '__main__':
     for attr, value in sorted(args.__dict__.items()):
         print("\t{}={}".format(attr.upper(), value))
 
-    use_cnn = False
-    if 'cnn' in args.model_name:
-        use_cnn=True
-    data = data_utils.Dataset(batch_size=args.batch_size, cnn=use_cnn)
+    embeddings, word_to_indx = myio.getEmbeddingTensor()
+    raw_corpus = myio.read_corpus(args.corpus)
+    ids_corpus = myio.map_corpus(raw_corpus, word_to_indx, max_len=100)
 
     # model
     if args.snapshot is None:
-        model = model_utils.get_model(data.get_embeddings(), args)
+        model = model_utils.get_model(embeddings, args)
     else :
         print('\nLoading model from [%s]...' % args.snapshot)
         try:
@@ -64,16 +64,22 @@ if __name__ == '__main__':
             print("Sorry, This snapshot doesn't exist."); exit()
     print(model)
 
-    print()
-    # train
     if args.train :
-        train_utils.train_model(data, data.create_eval_batches('dev'), data.create_eval_batches('test'), model, args)
+        train = myio.read_annotations('../../askubuntu/train_random.txt')
+        dev = myio.read_annotations('../../askubuntu/dev.txt', K_neg=-1, prune_pos_cnt=-1)
+        dev = myio.create_eval_batches(ids_corpus, dev, 0, pad_left=False)
+        test = myio.read_annotations('../../askubuntu/test.txt', K_neg=-1, prune_pos_cnt=-1)
+        test = myio.create_eval_batches(ids_corpus, test, 0, pad_left=False)
+        train_utils.train_model(model, train, dev, test, ids_corpus, args.batch_size, args)
+
     else:
-        print("Evaluating performance on train data...")
-        train_utils.eval_model_two(data.create_eval_batches_train(), model, args)
-        print()
+        dev = myio.read_annotations('../../askubuntu/dev.txt', K_neg=-1, prune_pos_cnt=-1)
+        dev = myio.create_eval_batches(ids_corpus, dev, 0, pad_left=False)
+        test = myio.read_annotations('../../askubuntu/test.txt', K_neg=-1, prune_pos_cnt=-1)
+        test = myio.create_eval_batches(ids_corpus, test, 0, pad_left=False)
+
         print("Evaluating performance on dev data...")
-        train_utils.eval_model_two(data.create_eval_batches("dev"), model, args)
+        train_utils.evaluate(dev, model, args)
         print()
         print("Evaluating performance on test data...")
-        train_utils.eval_model_two(data.create_eval_batches("test"), model, args)
+        train_utils.evaluate(test, model, args)
