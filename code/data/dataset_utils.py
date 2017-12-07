@@ -157,7 +157,7 @@ def load_dataset():
     print("\nLoading data...")
     embeddings, word_to_indx = getEmbeddingTensor()
     embedding_dim = embeddings.shape[1]
-    print "embedding_dim", embedding_dim
+    print("embedding_dim", embedding_dim)
 
     dataframe = getTokenizedTextDataFrame(word_to_indx)
     train = getTrainingDataIds()
