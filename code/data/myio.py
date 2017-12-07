@@ -11,8 +11,7 @@ def say(s, stream=sys.stdout):
     stream.write(s)
     stream.flush()
 
-def getEmbeddingTensor():
-    embedding_path='../../askubuntu/vector/vectors_pruned.200.txt.gz'
+def getEmbeddingTensor(embedding_path):
     lines = []
     with gzip.open(embedding_path) as file:
         lines = file.readlines()
@@ -29,8 +28,8 @@ def getEmbeddingTensor():
         embedding_tensor.append(vector)
         word_to_indx[word] = indx+1
 
-    embedding_tensor.append( np.ones( v_len ) * 1.0 / v_len )   
-    word_to_indx["<unk>"] = len(embedding_tensor) - 1 
+    embedding_tensor.append( np.ones( v_len ) * 1.0 / v_len )
+    word_to_indx["<unk>"] = len(embedding_tensor) - 1
     embedding_tensor = np.array(embedding_tensor, dtype=np.float32)
     return embedding_tensor, word_to_indx
 
@@ -60,6 +59,17 @@ def read_corpus(path):
     return raw_corpus
 
 
+def read_corpus_flat(path):
+    fopen = gzip.open if path.endswith(".gz") else open
+    corpus_text = []
+    with fopen(path) as fin:
+        for line in fin:
+            id, title, body = line.split("\t")
+            corpus_text.append(title)
+            corpus_text.append(body)
+    return corpus_text
+
+
 def map_corpus(raw_corpus, word_to_indx, max_len=100):
     ids_corpus = { }
     for id, pair in raw_corpus.iteritems():
@@ -67,7 +77,7 @@ def map_corpus(raw_corpus, word_to_indx, max_len=100):
         #if len(item[0]) == 0:
         #    say("empty title after mapping to IDs. Doc No.{}\n".format(id))
         #    continue
-        ids_corpus[id] = item	
+        ids_corpus[id] = item
     return ids_corpus
 
 def read_annotations(path, K_neg=20, prune_pos_cnt=10):

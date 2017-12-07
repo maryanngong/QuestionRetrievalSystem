@@ -38,8 +38,21 @@ def average_without_padding_cnn(x, ids, eps=1e-8, padding_id=0, cuda=True):
     s = torch.sum(x*mask, 2) / torch.sum(mask, 2)
     return s
 
-def evaluate(data, model, cuda=True):
-    res = [ ]
+def evaluate(data, model=None, cuda=True, baseline=False):
+    results = []
+    if model is not None:
+        results = compute_model_rankings(data, model, cuda)
+    if baseline:
+        results_baseline = compute_baseline_ranking(data, model)
+    e = Evaluation(results)
+    MAP = e.MAP()*100
+    MRR = e.MRR()*100
+    P1 = e.Precision(1)*100
+    P5 = e.Precision(5)*100
+    return MAP, MRR, P1, P5
+
+def compute_model_rankings(data, model, cuda):
+    res = []
     for idts, idbs, labels in data:
         titles, bodies = autograd.Variable(idts), autograd.Variable(idbs)
         if cuda:
@@ -56,12 +69,12 @@ def evaluate(data, model, cuda=True):
         ranks = (-scores).argsort()
         ranked_labels = labels[ranks]
         res.append(ranked_labels)
-    e = Evaluation(res)
-    MAP = e.MAP()*100
-    MRR = e.MRR()*100
-    P1 = e.Precision(1)*100
-    P5 = e.Precision(5)*100
-    return MAP, MRR, P1, P5
+    return res
+
+def compute_baseline_rankings(b):
+    res = []
+    for idts, idbs, labels in data:
+
 
 def train_model(model, train, dev_data, test_data, ids_corpus, batch_size, args):
     is_training=True
@@ -77,7 +90,7 @@ def train_model(model, train, dev_data, test_data, ids_corpus, batch_size, args)
         print("-------------\nEpoch {}:\n".format(epoch))
         # randomize new dataset each time
         train_batches = myio.create_batches(ids_corpus, train, batch_size, 0, pad_left=False)
-        
+
         N =len(train_batches)
         losses = []
         all_results = []
