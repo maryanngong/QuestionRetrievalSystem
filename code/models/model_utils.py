@@ -20,6 +20,8 @@ def get_model(embeddings, args):
         return CNN2(embeddings, args)
     elif args.model_name == 'cnn3':
         return CNN3(embeddings, args)
+    elif args.model_name == 'cnn4':
+        return CNN4(embeddings, args)
     elif args.model_name == 'lstm_bi':
         return LSTM_bi(embeddings, args)
     elif args.model_name == 'lstm3':
@@ -80,15 +82,39 @@ class CNN3(nn.Module):
         self.embedding_layer.weight.requires_grad = False
 
         self.conv1 = nn.Conv1d(embed_dim, args.num_hidden, kernel_size=3)
-        self.dropout = nn.Dropout(p=args.dropout)
+        # self.dropout = nn.Dropout(p=args.dropout)
 
 
     def forward(self, x_indx):
         x = self.embedding_layer(x_indx)
         # reorder dimensions for convolutional layer
         x =x.permute(0,2,1)
-        x = self.dropout(x)
+        # x = self.dropout(x)
+        # Trying functional dropout (bc it doesnt need to be trained) with training flag set properly
+        x = F.dropout(x, p=args.dropout, training=self.training)
         out = self.conv1(x)
+        return out
+
+class CNN4(nn.Module):
+
+    def __init__(self, embeddings, args):
+        super(CNN4, self).__init__()
+        self.args = args
+        vocab_size, embed_dim = embeddings.shape
+
+        self.embedding_layer = nn.Embedding( vocab_size, embed_dim)
+        self.embedding_layer.weight.data = torch.from_numpy( embeddings )
+        self.embedding_layer.weight.requires_grad = False
+        self.conv1 = nn.Conv1d(embed_dim, args.num_hidden, kernel_size=3)
+        # self.fc1 = nn.Linear(args.num_hidden * 3, args.num_hidden)
+
+    def forward(self, x_indx):
+        x = self.embedding_layer(x_indx)
+        # reorder dimensions for convolutional layer
+        x =x.permute(0,2,1)
+        x = F.dropout(x, p=self.args.dropout, training=self.training)
+        out = self.conv1(x)
+        out = F.tanh(out)
         return out
 
 

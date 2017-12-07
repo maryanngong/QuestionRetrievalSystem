@@ -17,7 +17,7 @@ import evaluation_utils as eval_utils
 def train_model(dataset, dev_data, test_data, model, args, perm=False):
     if args.cuda:
         model = model.cuda()
-    optimizer = torch.optim.Adam(model.parameters() , lr=args.lr)
+    optimizer = torch.optim.Adam(filter(lambda p: p.requires_grad, model.parameters()) , lr=args.lr)
     model.train()
 
     if not perm:
@@ -42,7 +42,7 @@ def train_model(dataset, dev_data, test_data, model, args, perm=False):
         print()
 
         # save model each epoch
-        torch.save(model, args.save_path+"_size"+str(args.num_hidden)+"_epoch"+str(epoch)) 
+        torch.save(model, args.save_path+"_size"+str(args.num_hidden)+"_epoch"+str(epoch))
 
         # also save best model seen so far according to dev MRR score
         if MRR > best_MRR:
@@ -97,8 +97,8 @@ def eval_model_two(data_batches, model, args):
     precision_at_5 = eval_utils.precision_at_k(all_results, 5)
     MAP = eval_utils.mean_average_precision(all_results)
     MRR = eval_utils.mean_reciprocal_rank(all_results)
-    print(tabulate([[MAP, MRR, precision_at_1, precision_at_5]], headers=['MAP', 'MRR', 'P@1', 'P@5']))   
-    return MAP, MRR 
+    print(tabulate([[MAP, MRR, precision_at_1, precision_at_5]], headers=['MAP', 'MRR', 'P@1', 'P@5']))
+    return MAP, MRR
 
 def run_epoch(data_batches, is_training, model, optimizer, args):
     '''
