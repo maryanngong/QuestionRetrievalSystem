@@ -80,12 +80,14 @@ class CNN3(nn.Module):
         self.embedding_layer.weight.requires_grad = False
 
         self.conv1 = nn.Conv1d(embed_dim, args.num_hidden, kernel_size=3)
+        self.dropout = nn.Dropout(p=args.dropout)
 
 
     def forward(self, x_indx):
         x = self.embedding_layer(x_indx)
         # reorder dimensions for convolutional layer
         x =x.permute(0,2,1)
+        x = self.dropout(x)
         out = self.conv1(x)
         return out
 
@@ -101,7 +103,7 @@ class LSTM3(nn.Module):
         self.embedding_layer.weight.data = torch.from_numpy( embeddings )
         self.rnn = nn.LSTM(input_size=embed_dim, hidden_size=args.num_hidden,
                           num_layers=1, batch_first=True, dropout=args.dropout)
-        # self.W_o = nn.Linear(args.num_hidden,1)
+
 
     def init_hidden_states(self, batch_size):
         h0 = autograd.Variable(torch.randn(1, batch_size, self.args.num_hidden))
@@ -131,7 +133,7 @@ class LSTM_bi(nn.Module):
         self.embedding_layer.weight.requires_grad = False
         self.rnn = nn.LSTM(input_size=embed_dim, hidden_size=args.num_hidden // 2,
                           num_layers=1, batch_first=True, bidirectional=True, dropout=args.dropout)
-        # self.W_o = nn.Linear(args.num_hidden,1)
+
 
     def init_hidden_states(self, batch_size):
         h0 = autograd.Variable(torch.randn(2, batch_size, self.args.num_hidden // 2))
