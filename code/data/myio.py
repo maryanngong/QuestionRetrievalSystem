@@ -41,9 +41,9 @@ def getGloveEmbeddingTensor(prune=False, corpuses=None):
     if prune:
         embedding_path="../data/glove.840B.300d.zip"
         embeddings_file = "../data/glove_embedding_tensor_pruned.npy"
-        word_to_indx_file = "../data/glove_word_to_indx_pruned" 
+        word_to_indx_file = "../data/glove_word_to_indx_pruned"
         all_tokens = get_all_tokens(corpuses)
-    else:       
+    else:
         embedding_path="../data/glove.840B.300d.zip"
         embeddings_file = "../data/glove_embedding_tensor.npy"
         word_to_indx_file = "../data/glove_word_to_indx"
@@ -379,9 +379,4 @@ if __name__ == '__main__':
     print("starting load")
     embedding_tensor, word_to_indx = getGloveEmbeddingTensor(prune=True, corpuses=[raw_ubuntu_corpus, raw_android_corpus])
     print "done"
-<<<<<<< HEAD
-    print len(word_to_indx)
-    print word_to_indx.keys()[:10]
-=======
     # ids_android_corpus = map_corpus(raw_android_corpus, word_to_indx, max_len=100)
->>>>>>> master
