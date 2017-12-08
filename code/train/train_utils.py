@@ -44,33 +44,29 @@ def average_without_padding_cnn(x, ids, eps=1e-8, padding_id=0, cuda=True):
     s = torch.sum(x*mask, 2) / (torch.sum(mask, 2)+eps)
     return s
 
-def get_scores(x):
-    print("shape of x", x.size())
-    x = F.normalize(x, dim=1)
-    scores = torch.mm(x[1:], x[0].unsqueeze(1))
-    print("shape of scores", scores.size())
-    return scores
-
-def get_scores_train(h_final, idps, n_d, args):
-    # print("hfinal shape", h_final.size())
-    indices = torch.LongTensor(idps.ravel())
-    if args.cuda:
-        indices = indices.cuda()
-    xp = h_final[indices]
-    n = idps.shape[0]
-    xp = xp.view(idps.shape[0], idps.shape[1], n_d)
-    # num query * n_d
-    query_vecs = xp[:,0,:].unsqueeze(1)
-    scores = torch.sum(query_vecs*xp[:,1:,:], 2)
-    target_indices = autograd.Variable(torch.zeros(n).type(torch.LongTensor))
-    if args.cuda:
-        target_indices = target_indices.cuda()
-    return scores, target_indices
-
-def evaluate(data, model, args):
-    res = [ ]
+def evaluate(model_data=None, model=None, args=None, vectorizer=None, vectorizer_data=None):
+    results = []
     meter = AUCMeter()
-    for idts, idbs, labels in data:
+    if model is not None:
+        print("Computing Model Evaluation Metrics...")
+        results = compute_model_rankings(model_data, model, args, meter)
+    if vectorizer is not None:
+        if vectorizer_data is None:
+            print("No vectorizer compatible data. Aborting...")
+            return 0, 0, 0, 0
+        print("Computing TFIDF Evaluation Metrics...")
+        results = compute_tfidf_rankings(vectorizer_data, vectorizer, meter)
+    e = Evaluation(results)
+    MAP = e.MAP()*100
+    MRR = e.MRR()*100
+    P1 = e.Precision(1)*100
+    P5 = e.Precision(5)*100
+    auc5 = meter.value(max_fpr=0.05)
+    return MAP, MRR, P1, P5, auc5
+
+def compute_model_rankings(data, model, args, meter):
+    res = []
+    for idts, idbs, labels in tqdm(data):
         titles, bodies = autograd.Variable(idts), autograd.Variable(idbs)
         if args.cuda:
             titles, bodies = titles.cuda(), bodies.cuda()
@@ -91,13 +87,27 @@ def evaluate(data, model, args):
         ranks = (-scores).argsort()
         ranked_labels = labels[ranks]
         res.append(ranked_labels)
-    e = Evaluation(res)
-    MAP = e.MAP()*100
-    MRR = e.MRR()*100
-    P1 = e.Precision(1)*100
-    P5 = e.Precision(5)*100
-    auc5 = meter.value(max_fpr=0.05)
-    return MAP, MRR, P1, P5, auc5
+    return res
+
+
+def compute_tfidf_rankings(data, vectorizer, meter):
+    res = []
+    for titles, bodies, labels in tqdm(data):
+        encoded_titles = vectorizer.transform(titles)
+        encoded_bodies = vectorizer.transform(bodies)
+        text_encodings = (encoded_titles + encoded_bodies) * 0.5
+        # print('TFIDF ENCODINGS')
+        # print(text_encodings)
+        scores = score_utils.batch_cosine_similarity_tfidf(text_encodings).numpy()
+        meter.add(scores, labels)
+        assert len(scores) == len(labels)
+        if sorted(scores, reverse=True)[0] < 0.01:
+            print("ZERO BEST")
+        ranks = (-scores).argsort()
+        ranked_labels = labels[ranks]
+        res.append(ranked_labels)
+    return res
+
 
 def train_model(model, train, dev_data, test_data, ids_corpus, batch_size, args):
     is_training=True
@@ -113,7 +123,7 @@ def train_model(model, train, dev_data, test_data, ids_corpus, batch_size, args)
         print("-------------\nEpoch {}:\n".format(epoch))
         # randomize new dataset each time
         train_batches = myio.create_batches(ids_corpus, train, batch_size, 0, pad_left=False)
-        
+
         N =len(train_batches)
         losses = []
         all_results = []
@@ -154,8 +164,8 @@ def train_model(model, train, dev_data, test_data, ids_corpus, batch_size, args)
             results = strip_ids_and_scores(rankings)
             all_results += results
 
-        # if epoch % 2 == 0 and len(args.save_path) > 0:
-        #     torch.save(model, args.save_path+"_size"+str(args.num_hidden)+"_epoch"+str(epoch))
+        if epoch % 2 == 0 and len(args.save_path) > 0:
+            torch.save(model, args.save_path+"_size"+str(args.num_hidden)+"_epoch"+str(epoch))
         # Evaluation Metrics
         precision_at_1 = eval_utils.precision_at_k(all_results, 1)*100
         precision_at_5 = eval_utils.precision_at_k(all_results, 5)*100
@@ -166,11 +176,11 @@ def train_model(model, train, dev_data, test_data, ids_corpus, batch_size, args)
         print('Train max-margin loss: {:.6f}'.format( avg_loss))
 
         print("Dev data Performance")
-        MAP, MRR, P1, P5, auc5 = evaluate(dev_data, model, args)
+        MAP, MRR, P1, P5, auc5 = evaluate(model_data=dev_data, model=model, args=args)
         print(tabulate([[MAP, MRR, P1, P5, auc5]], headers=['MAP', 'MRR', 'P@1', 'P@5', 'AUC0.05']))
         print()
         print("Test data Performance")
-        mapt, mrrt, p1t, p5t, auc5t = evaluate(test_data, model, args)
+        mapt, mrrt, p1t, p5t, auc5t = evaluate(model_data=test_data, model=model, args=args)
         print(tabulate([[mapt, mrrt, p1t, p5t, auc5t]], headers=['MAP', 'MRR', 'P@1', 'P@5', 'AUC0.05']))
         print()
 

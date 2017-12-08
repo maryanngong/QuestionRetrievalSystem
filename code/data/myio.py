@@ -15,8 +15,7 @@ def say(s, stream=sys.stdout):
     stream.write(s)
     stream.flush()
 
-def getEmbeddingTensor():
-    embedding_path='../../askubuntu/vector/vectors_pruned.200.txt.gz'
+def getEmbeddingTensor(embedding_path):
     lines = []
     with gzip.open(embedding_path) as file:
         lines = file.readlines()
@@ -33,8 +32,8 @@ def getEmbeddingTensor():
         embedding_tensor.append(vector)
         word_to_indx[word] = indx+1
     print("new embedding...")
-    embedding_tensor.append( np.zeros( v_len ))   
-    word_to_indx["<unk>"] = len(embedding_tensor) - 1 
+    embedding_tensor.append( np.zeros( v_len ))
+    word_to_indx["<unk>"] = len(embedding_tensor) - 1
     embedding_tensor = np.array(embedding_tensor, dtype=np.float32)
     return embedding_tensor, word_to_indx
 
@@ -43,7 +42,7 @@ def getGloveEmbeddingTensor(prune=False, corpuses=None):
         embedding_path="../data/glove.840B.300d.zip"
         embeddings_file = "../data/glove_embedding_tensor_pruned.npy"
         word_to_indx_file = "../data/glove_word_to_indx_pruned"
-    else:       
+    else:
         embedding_path="../data/glove.840B.300d.zip"
         embeddings_file = "../data/glove_embedding_tensor.npy"
         word_to_indx_file = "../data/glove_word_to_indx"
@@ -79,14 +78,14 @@ def getGloveEmbeddingTensor(prune=False, corpuses=None):
             word_to_indx[word] = indx+1
             indx += 1
 
-        embedding_tensor.append( np.ones( v_len ) * 1.0 / v_len )   
-        word_to_indx["<unk>"] = len(embedding_tensor) - 1 
+        embedding_tensor.append( np.zeros( v_len ))
+        word_to_indx["<unk>"] = len(embedding_tensor) - 1
         embedding_tensor = np.array(embedding_tensor, dtype=np.float32)
         print("saving embeddings to file...")
         np.save(embeddings_file, embedding_tensor)
         with open(word_to_indx_file, 'wb') as f:
             pickle.dump(word_to_indx, f)
-    return embedding_tensor, word_to_indx    
+    return embedding_tensor, word_to_indx
 
 # raw_corpuses is a list of raw_corpus dictionary objects
 def get_all_tokens(raw_corpuses):
@@ -144,6 +143,37 @@ def read_corpus(path):
     return raw_corpus
 
 
+def read_corpus_documents(path):
+    '''Reads corpus but leaves titles and bodies as strings (documents) rather than lists
+    '''
+    empty_cnt = 0
+    raw_corpus = {}
+    fopen = gzip.open if path.endswith(".gz") else open
+    with fopen(path) as fin:
+        for line in fin:
+            id, title, body = line.split("\t")
+            if len(title) == 0:
+                print id
+                empty_cnt += 1
+                continue
+            title = title.strip()
+            body = body.strip()
+            raw_corpus[id] = (title, body)
+    say("{} empty titles ignored.\n".format(empty_cnt))
+    return raw_corpus
+
+
+def read_corpus_flat(path):
+    fopen = gzip.open if path.endswith(".gz") else open
+    corpus_text = []
+    with fopen(path) as fin:
+        for line in fin:
+            id, title, body = line.split("\t")
+            corpus_text.append(title)
+            corpus_text.append(body)
+    return corpus_text
+
+
 def map_corpus(raw_corpus, word_to_indx, max_len=100):
     ids_corpus = { }
     for id, pair in raw_corpus.iteritems():
@@ -151,7 +181,7 @@ def map_corpus(raw_corpus, word_to_indx, max_len=100):
         #if len(item[0]) == 0:
         #    say("empty title after mapping to IDs. Doc No.{}\n".format(id))
         #    continue
-        ids_corpus[id] = item	
+        ids_corpus[id] = item
     return ids_corpus
 
 def read_annotations(path, K_neg=20, prune_pos_cnt=10):
@@ -255,6 +285,18 @@ def create_eval_batches(ids_corpus, data, padding_id, pad_left):
         lst.append((titles, bodies, np.array(qlabels, dtype="int32")))
     return lst
 
+def create_tfidf_batches(raw_corpus, data):
+    lst = [ ]
+    for pid, qids, qlabels in data:
+        titles = [ ]
+        bodies = [ ]
+        for id in [pid]+qids:
+            t, b = raw_corpus[id]
+            titles.append(t)
+            bodies.append(b)
+        lst.append((titles, bodies, np.array(qlabels, dtype="int32")))
+    return lst
+
 # Creates batches for evaluation of the following form
 # list of tuples
 #    - tuples of (titles, bodies, qlabels) -> title tensor data, body tensor data, and qlabel indicator if aligned candidate is pos or neg
@@ -271,18 +313,41 @@ def create_eval_batches_android(ids_corpus, pos_data, neg_data, padding_id=0, pa
         bodies = [b]
         qlabels = []
 
-        for qid in pos_data[pid]:
-            t, b = ids_corpus[qid]
-            titles.append(t)
-            bodies.append(b)
-            qlabels.append(1)
         for qid in neg_data[pid]:
             t, b = ids_corpus[qid]
             titles.append(t)
             bodies.append(b)
             qlabels.append(0)
+        for qid in pos_data[pid]:
+            t, b = ids_corpus[qid]
+            titles.append(t)
+            bodies.append(b)
+            qlabels.append(1)
 
         titles, bodies = create_one_batch(titles, bodies, padding_id, pad_left)
+        lst.append((titles, bodies, np.array(qlabels)))
+    return lst
+
+def create_tfidf_batches_android(raw_corpus, pos_data, neg_data):
+    all_pids = set(pos_data.keys() + neg_data.keys())
+    lst = []
+    for pid in all_pids:
+        t, b = raw_corpus[pid]
+        titles = [t]
+        bodies = [b]
+        qlabels = []
+
+        for qid in pos_data[pid]:
+            t, b = raw_corpus[qid]
+            titles.append(t)
+            bodies.append(b)
+            qlabels.append(1)
+        for qid in neg_data[pid]:
+            t, b = raw_corpus[qid]
+            titles.append(t)
+            bodies.append(b)
+            qlabels.append(0)
+
         lst.append((titles, bodies, np.array(qlabels)))
     return lst
 

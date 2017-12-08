@@ -55,3 +55,11 @@ def batch_cosine_similarity_eval(encoded, cuda=False):
     enc_candidates = encoded[1:]
     similarity_scores = F.cosine_similarity(enc_query.view(1,-1), enc_candidates)
     return similarity_scores
+
+def batch_cosine_similarity_tfidf(encoded):
+    enc_query = torch.from_numpy(encoded[0].todense())
+    enc_candidates = torch.from_numpy(encoded[1:].todense())
+    # print("ENC QUERY")
+    # print(enc_query)
+    similarity_scores = F.cosine_similarity(enc_query.view(1,-1), enc_candidates)
+    return similarity_scores
