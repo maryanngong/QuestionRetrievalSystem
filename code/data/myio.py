@@ -59,6 +59,26 @@ def read_corpus(path):
     return raw_corpus
 
 
+def read_corpus_documents(path):
+    '''Reads corpus but leaves titles and bodies as strings (documents) rather than lists
+    '''
+    empty_cnt = 0
+    raw_corpus = {}
+    fopen = gzip.open if path.endswith(".gz") else open
+    with fopen(path) as fin:
+        for line in fin:
+            id, title, body = line.split("\t")
+            if len(title) == 0:
+                print id
+                empty_cnt += 1
+                continue
+            title = title.strip()
+            body = body.strip()
+            raw_corpus[id] = (title, body)
+    say("{} empty titles ignored.\n".format(empty_cnt))
+    return raw_corpus
+
+
 def read_corpus_flat(path):
     fopen = gzip.open if path.endswith(".gz") else open
     corpus_text = []
@@ -161,6 +181,19 @@ def create_eval_batches(ids_corpus, data, padding_id, pad_left):
         titles, bodies = create_one_batch(titles, bodies, padding_id, pad_left)
         lst.append((titles, bodies, np.array(qlabels, dtype="int32")))
     return lst
+
+def create_tfidf_batches(raw_corpus, data):
+    lst = [ ]
+    for pid, qids, qlabels in data:
+        titles = [ ]
+        bodies = [ ]
+        for id in [pid]+qids:
+            t, b = raw_corpus[id]
+            titles.append(t)
+            bodies.append(b)
+        lst.append((titles, bodies, np.array(qlabels, dtype="int32")))
+    return lst
+
 
 def create_one_batch(titles, bodies, padding_id, pad_left):
     max_title_len = max(1, max(len(x) for x in titles))

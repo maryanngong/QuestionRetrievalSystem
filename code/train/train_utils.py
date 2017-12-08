@@ -38,12 +38,17 @@ def average_without_padding_cnn(x, ids, eps=1e-8, padding_id=0, cuda=True):
     s = torch.sum(x*mask, 2) / torch.sum(mask, 2)
     return s
 
-def evaluate(data, model=None, cuda=True, baseline=False):
+def evaluate(model_data=data, model=None, cuda=True, vectorizer=None, vectorizer_data=None):
     results = []
     if model is not None:
+        print("Computing Model Evaluation Metrics...")
         results = compute_model_rankings(data, model, cuda)
-    if baseline:
-        results_baseline = compute_baseline_ranking(data, model)
+    if vectorizer is not None:
+        if vectorizer_data is None:
+            print("No vectorizer compatible data. Aborting...")
+            return 0, 0, 0, 0
+        print("Computing TFIDF Evaluation Metrics...")
+        results = compute_tfidf_rankings(vectorizer_data, vectorizer)
     e = Evaluation(results)
     MAP = e.MAP()*100
     MRR = e.MRR()*100
@@ -71,9 +76,25 @@ def compute_model_rankings(data, model, cuda):
         res.append(ranked_labels)
     return res
 
-def compute_baseline_rankings(b):
+
+def compute_tfidf_rankings(data, vectorizer):
     res = []
-    for idts, idbs, labels in data:
+    for titles, bodies, labels in data:
+        encoded_titles = vectorizer.transform(titles)
+        encoded_bodies = vectorizer.transform(bodies)
+        text_encodings = (encoded_titles + encoded_bodies) * 0.5
+        # print('TFIDF ENCODINGS')
+        # print(text_encodings)
+        scores = score_utils.batch_cosine_similarity_tfidf(text_encodings).numpy()
+        assert len(scores) == len(labels)
+        # print('SCORES')
+        # print(scores)
+        if sorted(scores, reverse=True)[0] == 0:
+            print('best = zero detected')
+        ranks = (-scores).argsort()
+        ranked_labels = labels[ranks]
+        res.append(ranked_labels)
+    return res
 
 
 def train_model(model, train, dev_data, test_data, ids_corpus, batch_size, args):
@@ -131,7 +152,7 @@ def train_model(model, train, dev_data, test_data, ids_corpus, batch_size, args)
             results = strip_ids_and_scores(rankings)
             all_results += results
 
-        if epoch % 2 == 0 and if len(args.save_path) > 0:
+        if epoch % 2 == 0 and len(args.save_path) > 0:
             torch.save(model, args.save_path+"_size"+str(args.num_hidden)+"_epoch"+str(epoch))
         # Evaluation Metrics
         precision_at_1 = eval_utils.precision_at_k(all_results, 1)*100
