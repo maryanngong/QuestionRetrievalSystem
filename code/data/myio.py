@@ -30,8 +30,8 @@ def getEmbeddingTensor():
             embedding_tensor.append( np.zeros( len(vector) ) )
         embedding_tensor.append(vector)
         word_to_indx[word] = indx+1
-
-    embedding_tensor.append( np.ones( v_len ) * 1.0 / v_len )   
+    print("new embedding...")
+    embedding_tensor.append( np.zeros( v_len ))   
     word_to_indx["<unk>"] = len(embedding_tensor) - 1 
     embedding_tensor = np.array(embedding_tensor, dtype=np.float32)
     return embedding_tensor, word_to_indx
