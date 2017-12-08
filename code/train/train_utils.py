@@ -18,6 +18,8 @@ import data.myio as myio
 
 # Takes in raw dataset and masks out padding and then takes sum average for LSTM
 def average_without_padding_lstm(x, ids, eps=1e-8, padding_id=0, cuda=True):
+    #normalize x
+    x = F.normalize(x,dim=2)
     mask = ids != 0
     mask = mask.type(torch.FloatTensor)
     mask = autograd.Variable(mask.unsqueeze(2), requires_grad=False)
@@ -29,7 +31,10 @@ def average_without_padding_lstm(x, ids, eps=1e-8, padding_id=0, cuda=True):
 
 # Takes in raw dataset and masks out padding and then takes sum average for CNN
 def average_without_padding_cnn(x, ids, eps=1e-8, padding_id=0, cuda=True):
+    # normalize x
+    x = F.normalize(x, dim=1)
     mask = ids != 0
+    mask = mask[:,:-2]
     mask = mask.type(torch.FloatTensor)
     mask = autograd.Variable(mask.unsqueeze(1), requires_grad=False)
     if cuda:
@@ -38,20 +43,47 @@ def average_without_padding_cnn(x, ids, eps=1e-8, padding_id=0, cuda=True):
     s = torch.sum(x*mask, 2) / torch.sum(mask, 2)
     return s
 
-def evaluate(data, model, cuda=True):
+def get_scores(x):
+    print("shape of x", x.size())
+    x = F.normalize(x, dim=1)
+    scores = torch.mm(x[1:], x[0].unsqueeze(1))
+    print("shape of scores", scores.size())
+    return scores
+
+def get_scores_train(h_final, idps, n_d, args):
+    # print("hfinal shape", h_final.size())
+    indices = torch.LongTensor(idps.ravel())
+    if args.cuda:
+        indices = indices.cuda()
+    xp = h_final[indices]
+    n = idps.shape[0]
+    xp = xp.view(idps.shape[0], idps.shape[1], n_d)
+    # num query * n_d
+    query_vecs = xp[:,0,:].unsqueeze(1)
+    scores = torch.sum(query_vecs*xp[:,1:,:], 2)
+    target_indices = autograd.Variable(torch.zeros(n).type(torch.LongTensor))
+    if args.cuda:
+        target_indices = target_indices.cuda()
+    return scores, target_indices
+
+def evaluate(data, model, args):
     res = [ ]
     for idts, idbs, labels in data:
         titles, bodies = autograd.Variable(idts), autograd.Variable(idbs)
-        if cuda:
+        if args.cuda:
             titles, bodies = titles.cuda(), bodies.cuda()
         encode_titles = model(titles)
         encode_bodies = model(bodies)
 
-        titles_encodings = average_without_padding_lstm(encode_titles, idts)
-        bodies_encodings = average_without_padding_lstm(encode_bodies, idbs)
+        if 'lstm' in args.model_name:
+            titles_encodings = average_without_padding_lstm(encode_titles, idts)
+            bodies_encodings = average_without_padding_lstm(encode_bodies, idbs)
+        else:
+            titles_encodings = average_without_padding_cnn(encode_titles, idts)
+            bodies_encodings = average_without_padding_cnn(encode_bodies, idbs)
 
         text_encodings = (titles_encodings + bodies_encodings) * 0.5
-        scores = score_utils.batch_cosine_similarity_eval(text_encodings, cuda=cuda).data.cpu().numpy()
+        scores = score_utils.batch_cosine_similarity_eval(text_encodings, cuda=args.cuda).data.cpu().numpy()
         assert len(scores) == len(labels)
         ranks = (-scores).argsort()
         ranked_labels = labels[ranks]
@@ -118,8 +150,8 @@ def train_model(model, train, dev_data, test_data, ids_corpus, batch_size, args)
             results = strip_ids_and_scores(rankings)
             all_results += results
 
-        if epoch % 2 == 0 and if len(args.save_path) > 0:
-            torch.save(model, args.save_path+"_size"+str(args.num_hidden)+"_epoch"+str(epoch))
+        # if epoch % 2 == 0 and len(args.save_path) > 0:
+        #     torch.save(model, args.save_path+"_size"+str(args.num_hidden)+"_epoch"+str(epoch))
         # Evaluation Metrics
         precision_at_1 = eval_utils.precision_at_k(all_results, 1)*100
         precision_at_5 = eval_utils.precision_at_k(all_results, 5)*100
@@ -130,11 +162,11 @@ def train_model(model, train, dev_data, test_data, ids_corpus, batch_size, args)
         print('Train max-margin loss: {:.6f}'.format( avg_loss))
 
         print("Dev data Performance")
-        MAP, MRR, P1, P5 = evaluate(dev_data, model, args.cuda)
+        MAP, MRR, P1, P5 = evaluate(dev_data, model, args)
         print(tabulate([[MAP, MRR, P1, P5]], headers=['MAP', 'MRR', 'P@1', 'P@5']))
         print()
         print("Test data Performance")
-        mapt, mrrt, p1t, p5t = evaluate(test_data, model, args.cuda)
+        mapt, mrrt, p1t, p5t = evaluate(test_data, model, args)
         print(tabulate([[mapt, mrrt, p1t, p5t]], headers=['MAP', 'MRR', 'P@1', 'P@5']))
         print()
 
