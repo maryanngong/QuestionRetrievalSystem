@@ -39,9 +39,9 @@ def getEmbeddingTensor():
     return embedding_tensor, word_to_indx
 
 def getGloveEmbeddingTensor():
-    embedding_path="glove.840B.300d.zip"
-    embeddings_file = "glove_embedding_tensor.npy"
-    word_to_indx_file = "glove_word_to_indx"
+    embedding_path="../data/glove.840B.300d.zip"
+    embeddings_file = "../data/glove_embedding_tensor.npy"
+    word_to_indx_file = "../data/glove_word_to_indx"
     if os.path.exists(embeddings_file) and os.path.exists(word_to_indx_file):
         print("Loading Glove embeddings from file...")
         embedding_tensor = np.load(embeddings_file)
@@ -154,9 +154,8 @@ def read_annotations_android(path):
     pid_to_qids = {}
     with open(path) as fin:
         for line in fin:
-            parts = line.split("\t")
+            parts = line.rstrip().split()
             pid, qid = parts[:2]
-            qid = qid.split()
             if pid not in pid_to_qids:
                 pid_to_qids[pid] = set([qid])
             else:
@@ -227,10 +226,11 @@ def create_eval_batches_android(ids_corpus, pos_data, neg_data, padding_id=0, pa
     all_pids = set(pos_data.keys() + neg_data.keys())
     lst = []
     for pid in all_pids:
-        titles = [ids_corpus[pid]]
-        bodies = [ids_corpus[pid]]
+        t, b = ids_corpus[pid]
+        titles = [t]
+        bodies = [b]
         qlabels = []
-        
+
         for qid in pos_data[pid]:
             t, b = ids_corpus[qid]
             titles.append(t)

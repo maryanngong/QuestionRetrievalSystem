@@ -96,4 +96,4 @@ if __name__ == '__main__':
         print("Evaluating performance on test data...")
         MAP, MRR, P1, P5, auc5 = train_utils.evaluate(test, model, args)
         print(tabulate([[MAP, MRR, P1, P5, auc5]], headers=['MAP', 'MRR', 'P@1', 'P@5', 'AUC0.05']))
-        
+

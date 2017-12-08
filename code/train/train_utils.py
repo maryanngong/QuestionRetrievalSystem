@@ -122,8 +122,8 @@ def train_model(model, train, dev_data, test_data, ids_corpus, batch_size, args)
             results = strip_ids_and_scores(rankings)
             all_results += results
 
-        if epoch % 2 == 0 and if len(args.save_path) > 0:
-            torch.save(model, args.save_path+"_size"+str(args.num_hidden)+"_epoch"+str(epoch))
+        # if epoch % 2 == 0 and if len(args.save_path) > 0:
+        #     torch.save(model, args.save_path+"_size"+str(args.num_hidden)+"_epoch"+str(epoch))
         # Evaluation Metrics
         precision_at_1 = eval_utils.precision_at_k(all_results, 1)*100
         precision_at_5 = eval_utils.precision_at_k(all_results, 5)*100
