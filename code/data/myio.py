@@ -42,8 +42,7 @@ def getGloveEmbeddingTensor(prune=False, corpuses=None):
     if prune:
         embedding_path="../data/glove.840B.300d.zip"
         embeddings_file = "../data/glove_embedding_tensor_pruned.npy"
-        word_to_indx_file = "../data/glove_word_to_indx_pruned" 
-        all_tokens = get_all_tokens(corpuses)
+        word_to_indx_file = "../data/glove_word_to_indx_pruned"
     else:       
         embedding_path="../data/glove.840B.300d.zip"
         embeddings_file = "../data/glove_embedding_tensor.npy"
@@ -57,6 +56,8 @@ def getGloveEmbeddingTensor(prune=False, corpuses=None):
 
 
     print("Reading Glove embeddings from zipfile. This will take a few moments...")
+    if prune:
+        all_tokens = get_all_tokens(corpuses)
     with ZipFile(embedding_path) as fin:
         content = fin.read('glove.840B.300d.txt')
         lines = content.splitlines()

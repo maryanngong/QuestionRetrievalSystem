@@ -51,7 +51,7 @@ if __name__ == '__main__':
         print("\t{}={}".format(attr.upper(), value))
 
     if args.android:
-        embeddings, word_to_indx = myio.getGloveEmbeddingTensor()
+        embeddings, word_to_indx = myio.getGloveEmbeddingTensor(prune=True)
     else:
         embeddings, word_to_indx = myio.getEmbeddingTensor()
     raw_corpus = myio.read_corpus(args.corpus)

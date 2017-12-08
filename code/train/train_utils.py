@@ -174,6 +174,9 @@ def train_model(model, train, dev_data, test_data, ids_corpus, batch_size, args)
         print(tabulate([[mapt, mrrt, p1t, p5t, auc5t]], headers=['MAP', 'MRR', 'P@1', 'P@5', 'AUC0.05']))
         print()
 
+        # for android dataset, validate using AUC0.05 metric
+        if args.android:
+            MRR = auc5
         if MRR > best_MRR:
             best_MRR = MRR
             best_epoch = epoch
