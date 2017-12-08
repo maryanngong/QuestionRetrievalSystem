@@ -68,7 +68,7 @@ def getGloveEmbeddingTensor():
             word_to_indx[word] = indx+1
             indx += 1
 
-        embedding_tensor.append( np.zeros( v_len ))   
+        embedding_tensor.append( np.zeros( v_len ))
         word_to_indx["<unk>"] = len(embedding_tensor) - 1
         embedding_tensor = np.array(embedding_tensor, dtype=np.float32)
         print("saving embeddings to file...")
@@ -274,18 +274,41 @@ def create_eval_batches_android(ids_corpus, pos_data, neg_data, padding_id=0, pa
         bodies = [b]
         qlabels = []
 
-        for qid in pos_data[pid]:
-            t, b = ids_corpus[qid]
-            titles.append(t)
-            bodies.append(b)
-            qlabels.append(1)
         for qid in neg_data[pid]:
             t, b = ids_corpus[qid]
             titles.append(t)
             bodies.append(b)
             qlabels.append(0)
+        for qid in pos_data[pid]:
+            t, b = ids_corpus[qid]
+            titles.append(t)
+            bodies.append(b)
+            qlabels.append(1)
 
         titles, bodies = create_one_batch(titles, bodies, padding_id, pad_left)
+        lst.append((titles, bodies, np.array(qlabels)))
+    return lst
+
+def create_tfidf_batches_android(raw_corpus, pos_data, neg_data):
+    all_pids = set(pos_data.keys() + neg_data.keys())
+    lst = []
+    for pid in all_pids:
+        t, b = raw_corpus[pid]
+        titles = [t]
+        bodies = [b]
+        qlabels = []
+
+        for qid in pos_data[pid]:
+            t, b = raw_corpus[qid]
+            titles.append(t)
+            bodies.append(b)
+            qlabels.append(1)
+        for qid in neg_data[pid]:
+            t, b = raw_corpus[qid]
+            titles.append(t)
+            bodies.append(b)
+            qlabels.append(0)
+
         lst.append((titles, bodies, np.array(qlabels)))
     return lst
 

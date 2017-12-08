@@ -49,13 +49,13 @@ def evaluate(model_data=data, model=None, cuda=True, vectorizer=None, vectorizer
     meter = AUCMeter()
     if model is not None:
         print("Computing Model Evaluation Metrics...")
-        results = compute_model_rankings(data, model, cuda)
+        results = compute_model_rankings(data, model, cuda, meter)
     if vectorizer is not None:
         if vectorizer_data is None:
             print("No vectorizer compatible data. Aborting...")
             return 0, 0, 0, 0
         print("Computing TFIDF Evaluation Metrics...")
-        results = compute_tfidf_rankings(vectorizer_data, vectorizer)
+        results = compute_tfidf_rankings(vectorizer_data, vectorizer, meter)
     e = Evaluation(results)
     MAP = e.MAP()*100
     MRR = e.MRR()*100
@@ -64,9 +64,9 @@ def evaluate(model_data=data, model=None, cuda=True, vectorizer=None, vectorizer
     auc5 = meter.value(max_fpr=0.05)
     return MAP, MRR, P1, P5, auc5
 
-def compute_model_rankings(data, model, cuda):
+def compute_model_rankings(data, model, cuda, meter):
     res = []
-    for idts, idbs, labels in data:
+    for idts, idbs, labels in tqdm(data):
         titles, bodies = autograd.Variable(idts), autograd.Variable(idbs)
         if args.cuda:
             titles, bodies = titles.cuda(), bodies.cuda()
@@ -90,20 +90,19 @@ def compute_model_rankings(data, model, cuda):
     return res
 
 
-def compute_tfidf_rankings(data, vectorizer):
+def compute_tfidf_rankings(data, vectorizer, meter):
     res = []
-    for titles, bodies, labels in data:
+    for titles, bodies, labels in tqdm(data):
         encoded_titles = vectorizer.transform(titles)
         encoded_bodies = vectorizer.transform(bodies)
         text_encodings = (encoded_titles + encoded_bodies) * 0.5
         # print('TFIDF ENCODINGS')
         # print(text_encodings)
         scores = score_utils.batch_cosine_similarity_tfidf(text_encodings).numpy()
+        meter.add(scores, labels)
         assert len(scores) == len(labels)
-        # print('SCORES')
-        # print(scores)
-        if sorted(scores, reverse=True)[0] == 0:
-            print('best = zero detected')
+        if sorted(scores, reverse=True)[0] < 0.01:
+            print("ZERO BEST")
         ranks = (-scores).argsort()
         ranked_labels = labels[ranks]
         res.append(ranked_labels)

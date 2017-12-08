@@ -36,7 +36,6 @@ parser.add_argument('--train', action='store_true', default=False, help='enable 
 parser.add_argument('--snapshot', type=str, default=None, help='filename of model snapshot to load[default: None]')
 parser.add_argument('--save_path', type=str, default="", help='Path where to dump model')
 
-parser.add_argument('--corpus', type=str, default='../../askubuntu/text_tokenized.txt.gz')
 parser.add_argument('--android', action='store_true', default=False, help="run evaluation on android dataset")
 
 args = parser.parse_args()
@@ -52,14 +51,27 @@ if __name__ == '__main__':
     askubuntu_corpus = '../../askubuntu/text_tokenized.txt.gz'
 
     if args.model_name == 'tfidf':
-        raw_corpus = myio.read_corpus_documents(askubuntu_corpus)
-        flat_corpus_text = myio.read_corpus_flat(askubuntu_corpus)
-        vectorizer = TfidfVectorizer(min_df=1, ngram_range=(1,1), binary=False)
-        vectorizer.fit(flat_corpus_text)
-        dev = myio.read_annotations('../../askubuntu/dev.txt', K_neg=-1, prune_pos_cnt=-1)
-        dev = myio.create_tfidf_batches(raw_corpus, dev)
-        test = myio.read_annotations('../../askubuntu/test.txt', K_neg=-1, prune_pos_cnt=-1)
-        test = myio.create_tfidf_batches(raw_corpus, test)
+        if args.android:
+            raw_corpus = myio.read_corpus_documents('../../Android/corpus.tsv.gz')
+            flat_corpus_text = myio.read_corpus_flat('../../Android/corpus.tsv.gz')
+            vectorizer = TfidfVectorizer(min_df=1, ngram_range=(1,1), binary=False)
+            vectorizer.fit(flat_corpus_text)
+            raw_android_corpus = myio.read_corpus_documents('../../Android/corpus.tsv.gz')
+            dev_neg_dict = myio.read_annotations_android('../../Android/dev.neg.txt')
+            dev_pos_dict = myio.read_annotations_android('../../Android/dev.pos.txt')
+            test_neg_dict = myio.read_annotations_android('../../Android/test.neg.txt')
+            test_pos_dict = myio.read_annotations_android('../../Android/test.pos.txt')
+            dev = myio.create_tfidf_batches_android(raw_android_corpus, dev_pos_dict, dev_neg_dict)
+            test = myio.create_tfidf_batches_android(raw_android_corpus, test_pos_dict, test_neg_dict)
+        else:
+            raw_corpus = myio.read_corpus_documents(askubuntu_corpus)
+            flat_corpus_text = myio.read_corpus_flat(askubuntu_corpus)
+            vectorizer = TfidfVectorizer(min_df=1, ngram_range=(1,1), binary=False)
+            vectorizer.fit(flat_corpus_text)
+            dev = myio.read_annotations('../../askubuntu/dev.txt', K_neg=-1, prune_pos_cnt=-1)
+            dev = myio.create_tfidf_batches(raw_corpus, dev)
+            test = myio.read_annotations('../../askubuntu/test.txt', K_neg=-1, prune_pos_cnt=-1)
+            test = myio.create_tfidf_batches(raw_corpus, test)
         print("Evaluating performance on dev data...")
         MAP, MRR, P1, P5, auc5 = train_utils.evaluate(vectorizer=vectorizer, vectorizer_data=dev)
         print(tabulate([[MAP, MRR, P1, P5, auc5]], headers=['MAP', 'MRR', 'P@1', 'P@5', 'AUC0.05']))
