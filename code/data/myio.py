@@ -78,13 +78,31 @@ def getGloveEmbeddingTensor():
             pickle.dump(word_to_indx, f)
     return embedding_tensor, word_to_indx    
 
+def prune_embedding(word_to_indx, embedding_tensor, raw_corpus):
+    pass
+
 # Helper function that constructs and index tensor given the list of text tokens
 def getIndicesTensor(text_arr, word_to_indx, max_length=100):
     nil_indx = word_to_indx["<unk>"]
     # lowercase the corpus now
-    text_indx = [ word_to_indx[x.lower()] if x in word_to_indx else nil_indx for x in text_arr][:max_length]
-    x = text_indx
-    return x
+    text_indx = []
+    count_upper = 0
+    count_total = 0
+    count_unk = 0
+    for x in text_arr:
+        x_indx = nil_indx
+        if x in word_to_indx:
+            if x.lower() in word_to_indx:
+                x_indx = word_to_indx[x.lower()]
+            else:
+                x_indx = word_to_indx[x]
+                count_upper += 1
+        else:
+            count_unk += 1
+        count_total += 1
+        text_indx.append(x_indx)
+    # print("Number of words that only exist in uppercase, unk, total:", count_upper, count_unk, count_total)
+    return text_indx[:max_length]
 
 
 def read_corpus(path):
@@ -274,5 +292,5 @@ if __name__ == '__main__':
     print("starting load")
     embedding_tensor, word_to_indx = getGloveEmbeddingTensor()
     print "done"
-    print len(word_to_indx)
-    print word_to_indx.keys()[:10]
+    raw_android_corpus = read_corpus('../../Android/corpus.tsv.gz')
+    ids_android_corpus = map_corpus(raw_android_corpus, word_to_indx, max_len=100)
