@@ -27,7 +27,7 @@ def average_without_padding_lstm(x, ids, eps=1e-8, padding_id=0, cuda=True):
     if cuda:
         mask = mask.cuda()
 
-    s = torch.sum(x*mask, 1) / torch.sum(mask, 1)
+    s = torch.sum(x*mask, 1) / (torch.sum(mask, 1)+eps)
     return s
 
 # Takes in raw dataset and masks out padding and then takes sum average for CNN
@@ -41,7 +41,7 @@ def average_without_padding_cnn(x, ids, eps=1e-8, padding_id=0, cuda=True):
     if cuda:
         mask = mask.cuda()
 
-    s = torch.sum(x*mask, 2) / torch.sum(mask, 2)
+    s = torch.sum(x*mask, 2) / (torch.sum(mask, 2)+eps)
     return s
 
 def get_scores(x):
