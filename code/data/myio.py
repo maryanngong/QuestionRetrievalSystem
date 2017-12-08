@@ -6,6 +6,8 @@ from collections import Counter
 from sklearn.feature_extraction.text import TfidfVectorizer
 import numpy as np
 import torch
+from zipfile import ZipFile
+from tqdm import tqdm
 
 def say(s, stream=sys.stdout):
     stream.write(s)
@@ -33,6 +35,32 @@ def getEmbeddingTensor():
     word_to_indx["<unk>"] = len(embedding_tensor) - 1 
     embedding_tensor = np.array(embedding_tensor, dtype=np.float32)
     return embedding_tensor, word_to_indx
+
+def getGloveEmbeddingTensor():
+    embedding_path="glove.840B.300d.zip"
+    with ZipFile(embedding_path) as fin:
+        content = fin.read('glove.840B.300d.txt')
+        lines = content.splitlines()
+
+        embedding_tensor = []
+        word_to_indx = {}
+        v_len = 0
+        indx = 0
+        for l in tqdm(lines, total=len(lines)):
+            l = l.rstrip()
+            word, emb = l.split()[0], l.split()[1:]
+            vector = [float(x) for x in emb ]
+            v_len = len(vector)
+            if indx == 0:
+                embedding_tensor.append( np.zeros( len(vector) ) )
+            embedding_tensor.append(vector)
+            word_to_indx[word] = indx+1
+            indx += 1
+
+        embedding_tensor.append( np.ones( v_len ) * 1.0 / v_len )   
+        word_to_indx["<unk>"] = len(embedding_tensor) - 1 
+        embedding_tensor = np.array(embedding_tensor, dtype=np.float32)
+    return embedding_tensor, word_to_indx    
 
 # Helper function that constructs and index tensor given the list of text tokens
 def getIndicesTensor(text_arr, word_to_indx, max_length=100):
@@ -99,6 +127,26 @@ def read_annotations(path, K_neg=20, prune_pos_cnt=10):
 
     return lst
 
+
+# Reads annotations from txt file
+# Processes each line which contains two ids
+# first id - query question
+# second id - corresponding neg/pos example (depending on the file type)
+# Returns:
+#   pid_to_qids - dictionary mapping each query id to its set of pos/neg ids.
+def read_annotations_android(path):
+    pid_to_qids = {}
+    with open(path) as fin:
+        for line in fin:
+            parts = line.split("\t")
+            pid, qid = parts[:2]
+            qid = qid.split()
+            if pid not in pid_to_qids:
+                pid_to_qids[pid] = set([qid])
+            else:
+                pid_to_qids[pid].add(qid)
+    return pid_to_qids
+
 def create_batches(ids_corpus, data, batch_size, padding_id, perm=None, pad_left=True):
     if perm is None:
         perm = range(len(data))
@@ -152,6 +200,29 @@ def create_eval_batches(ids_corpus, data, padding_id, pad_left):
         lst.append((titles, bodies, np.array(qlabels, dtype="int32")))
     return lst
 
+# Creates batches for evaluation of the following form
+# list of tuples
+#    - tuples of (titles, bodies, qlabels) -> title tensor data, body tensor data, and qlabel indicator if aligned candidate is pos or neg
+# Parameters:
+#   - ids_corpus: map from query id to emedding indexed tensor
+#   - pos_data : dictionary mapping query id to set of positive query ids
+#   - neg_data: dictionary mapping query id to set of negative query ids
+def create_eval_batches_android(ids_corpus, pos_data, neg_data, padding_id=0, pad_left=False):
+    all_pids = set(pos_data.keys() + neg_data.keys())
+    lst = []
+    for pid in all_pids:
+        titles = [ids_corpus[pid]]
+        bodies = [ids_corpus[pid]]
+        qlabels = []
+        for qid in list(pos_data[pid]) + list(neg_data[pid]):
+            t, b = ids_corpus[qid]
+            titles.append(t)
+            bodies.append(b)
+            qlabels.append(int(qid in pos_data[pid]))
+        titles, bodies = create_one_batch(titles, bodies, padding_id, pad_left)
+        lst.append((titles, bodies, np.array(qlabels)))
+    return lst
+
 def create_one_batch(titles, bodies, padding_id, pad_left):
     max_title_len = max(1, max(len(x) for x in titles))
     max_body_len = max(1, max(len(x) for x in bodies))
@@ -174,3 +245,10 @@ def create_hinge_batch(triples):
     triples = np.vstack([ np.pad(x,(0,max_len-len(x)),'edge')
                         for x in triples ])
     return triples
+
+if __name__ == '__main__':
+    print("starting load")
+    embedding_tensor, word_to_indx = getGloveEmbeddingTensor()
+    print "done"
+    print len(word_to_indx)
+    print word_to_indx.keys()[:10]
