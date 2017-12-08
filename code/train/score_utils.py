@@ -37,7 +37,7 @@ def batch_cosine_similarity(encoded, training_ids, cuda=False):
         similarity_scores = F.cosine_similarity(enc_query.view(1,-1), enc_candidates)
         all_scores.append(similarity_scores)
 
-    target_indices = autograd.Variable(torch.zeros(n).type(torch.LongTensor))
+    target_indices = autograd.Variable(torch.zeros(n).type(torch.LongTensor), requires_grad=False)
     if cuda:
         target_indices = target_indices.cuda()
     return torch.cat(all_scores, 0).view(n, -1), target_indices 

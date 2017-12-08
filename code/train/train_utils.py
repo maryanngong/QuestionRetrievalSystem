@@ -14,10 +14,13 @@ import evaluation_utils as eval_utils
 from itertools import ifilter
 from evaluation import Evaluation
 import data.myio as myio
+from meter import AUCMeter
 
 
 # Takes in raw dataset and masks out padding and then takes sum average for LSTM
 def average_without_padding_lstm(x, ids, eps=1e-8, padding_id=0, cuda=True):
+    #normalize x
+    x = F.normalize(x,dim=2)
     mask = ids != 0
     mask = mask.type(torch.FloatTensor)
     mask = autograd.Variable(mask.unsqueeze(2), requires_grad=False)
@@ -29,7 +32,10 @@ def average_without_padding_lstm(x, ids, eps=1e-8, padding_id=0, cuda=True):
 
 # Takes in raw dataset and masks out padding and then takes sum average for CNN
 def average_without_padding_cnn(x, ids, eps=1e-8, padding_id=0, cuda=True):
+    # normalize x
+    x = F.normalize(x, dim=1)
     mask = ids != 0
+    mask = mask[:,:-2]
     mask = mask.type(torch.FloatTensor)
     mask = autograd.Variable(mask.unsqueeze(1), requires_grad=False)
     if cuda:
@@ -40,6 +46,7 @@ def average_without_padding_cnn(x, ids, eps=1e-8, padding_id=0, cuda=True):
 
 def evaluate(model_data=data, model=None, cuda=True, vectorizer=None, vectorizer_data=None):
     results = []
+    meter = AUCMeter()
     if model is not None:
         print("Computing Model Evaluation Metrics...")
         results = compute_model_rankings(data, model, cuda)
@@ -54,22 +61,28 @@ def evaluate(model_data=data, model=None, cuda=True, vectorizer=None, vectorizer
     MRR = e.MRR()*100
     P1 = e.Precision(1)*100
     P5 = e.Precision(5)*100
-    return MAP, MRR, P1, P5
+    auc5 = meter.value(max_fpr=0.05)
+    return MAP, MRR, P1, P5, auc5
 
 def compute_model_rankings(data, model, cuda):
     res = []
     for idts, idbs, labels in data:
         titles, bodies = autograd.Variable(idts), autograd.Variable(idbs)
-        if cuda:
+        if args.cuda:
             titles, bodies = titles.cuda(), bodies.cuda()
         encode_titles = model(titles)
         encode_bodies = model(bodies)
 
-        titles_encodings = average_without_padding_lstm(encode_titles, idts)
-        bodies_encodings = average_without_padding_lstm(encode_bodies, idbs)
+        if 'lstm' in args.model_name:
+            titles_encodings = average_without_padding_lstm(encode_titles, idts)
+            bodies_encodings = average_without_padding_lstm(encode_bodies, idbs)
+        else:
+            titles_encodings = average_without_padding_cnn(encode_titles, idts)
+            bodies_encodings = average_without_padding_cnn(encode_bodies, idbs)
 
         text_encodings = (titles_encodings + bodies_encodings) * 0.5
-        scores = score_utils.batch_cosine_similarity_eval(text_encodings, cuda=cuda).data.cpu().numpy()
+        scores = score_utils.batch_cosine_similarity_eval(text_encodings, cuda=args.cuda).data.cpu().numpy()
+        meter.add(scores, labels)
         assert len(scores) == len(labels)
         ranks = (-scores).argsort()
         ranked_labels = labels[ranks]
@@ -164,12 +177,12 @@ def train_model(model, train, dev_data, test_data, ids_corpus, batch_size, args)
         print('Train max-margin loss: {:.6f}'.format( avg_loss))
 
         print("Dev data Performance")
-        MAP, MRR, P1, P5 = evaluate(dev_data, model, args.cuda)
-        print(tabulate([[MAP, MRR, P1, P5]], headers=['MAP', 'MRR', 'P@1', 'P@5']))
+        MAP, MRR, P1, P5, auc5 = evaluate(dev_data, model, args)
+        print(tabulate([[MAP, MRR, P1, P5, auc5]], headers=['MAP', 'MRR', 'P@1', 'P@5', 'AUC0.05']))
         print()
         print("Test data Performance")
-        mapt, mrrt, p1t, p5t = evaluate(test_data, model, args.cuda)
-        print(tabulate([[mapt, mrrt, p1t, p5t]], headers=['MAP', 'MRR', 'P@1', 'P@5']))
+        mapt, mrrt, p1t, p5t, auc5t = evaluate(test_data, model, args)
+        print(tabulate([[mapt, mrrt, p1t, p5t, auc5t]], headers=['MAP', 'MRR', 'P@1', 'P@5', 'AUC0.05']))
         print()
 
         if MRR > best_MRR:
