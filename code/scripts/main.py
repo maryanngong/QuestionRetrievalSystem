@@ -38,6 +38,7 @@ parser.add_argument('--snapshot', type=str, default=None, help='filename of mode
 parser.add_argument('--save_path', type=str, default="", help='Path where to dump model')
 
 parser.add_argument('--corpus', type=str, default='../../askubuntu/text_tokenized.txt.gz')
+parser.add_argument('--android', action='store_true', default=False, help="run evaluation on android dataset")
 
 args = parser.parse_args()
 
@@ -49,7 +50,10 @@ if __name__ == '__main__':
     for attr, value in sorted(args.__dict__.items()):
         print("\t{}={}".format(attr.upper(), value))
 
-    embeddings, word_to_indx = myio.getEmbeddingTensor()
+    if args.android:
+        embeddings, word_to_indx = myio.getGloveEmbeddingTensor()
+    else:
+        embeddings, word_to_indx = myio.getEmbeddingTensor()
     raw_corpus = myio.read_corpus(args.corpus)
     ids_corpus = myio.map_corpus(raw_corpus, word_to_indx, max_len=100)
 
@@ -64,22 +68,32 @@ if __name__ == '__main__':
             print("Sorry, This snapshot doesn't exist."); exit()
     print(model)
 
-    if args.train :
-        train = myio.read_annotations('../../askubuntu/train_random.txt')
-        dev = myio.read_annotations('../../askubuntu/dev.txt', K_neg=-1, prune_pos_cnt=-1)
-        dev = myio.create_eval_batches(ids_corpus, dev, 0, pad_left=False)
-        test = myio.read_annotations('../../askubuntu/test.txt', K_neg=-1, prune_pos_cnt=-1)
-        test = myio.create_eval_batches(ids_corpus, test, 0, pad_left=False)
-        train_utils.train_model(model, train, dev, test, ids_corpus, args.batch_size, args)
-
+    if args.android:
+        raw_android_corpus = myio.read_corpus('../../Android/corpus.tsv.gz')
+        ids_android_corpus = myio.map_corpus(raw_android_corpus, word_to_indx, max_len=100)
+        dev_neg_dict = myio.read_annotations_android('../../Android/dev.neg.txt')
+        dev_pos_dict = myio.read_annotations_android('../../Android/dev.pos.txt')
+        test_neg_dict = myio.read_annotations_android('../../Android/test.neg.txt')
+        test_pos_dict = myio.read_annotations_android('../../Android/test.pos.txt')
+        dev = myio.create_eval_batches_android(ids_android_corpus, dev_pos_dict, dev_neg_dict)
+        test = myio.create_eval_batches_android(ids_android_corpus, test_pos_dict, test_neg_dict)
     else:
         dev = myio.read_annotations('../../askubuntu/dev.txt', K_neg=-1, prune_pos_cnt=-1)
         dev = myio.create_eval_batches(ids_corpus, dev, 0, pad_left=False)
         test = myio.read_annotations('../../askubuntu/test.txt', K_neg=-1, prune_pos_cnt=-1)
         test = myio.create_eval_batches(ids_corpus, test, 0, pad_left=False)
 
+    if args.train :
+        train = myio.read_annotations('../../askubuntu/train_random.txt')
+        train_utils.train_model(model, train, dev, test, ids_corpus, args.batch_size, args)
+
+    else:
         print("Evaluating performance on dev data...")
-        train_utils.evaluate(dev, model, args)
+        MAP, MRR, P1, P5, auc5 = train_utils.evaluate(dev, model, args)
+        print(tabulate([[MAP, MRR, P1, P5, auc5]], headers=['MAP', 'MRR', 'P@1', 'P@5', 'AUC0.05']))
+
         print()
         print("Evaluating performance on test data...")
-        train_utils.evaluate(test, model, args)
+        MAP, MRR, P1, P5, auc5 = train_utils.evaluate(test, model, args)
+        print(tabulate([[MAP, MRR, P1, P5, auc5]], headers=['MAP', 'MRR', 'P@1', 'P@5', 'AUC0.05']))
+        
