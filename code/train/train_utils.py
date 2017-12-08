@@ -14,6 +14,7 @@ import evaluation_utils as eval_utils
 from itertools import ifilter
 from evaluation import Evaluation
 import data.myio as myio
+from meter import AUCMeter
 
 
 # Takes in raw dataset and masks out padding and then takes sum average for LSTM
@@ -40,6 +41,7 @@ def average_without_padding_cnn(x, ids, eps=1e-8, padding_id=0, cuda=True):
 
 def evaluate(data, model, cuda=True):
     res = [ ]
+    meter = AUCMeter()
     for idts, idbs, labels in data:
         titles, bodies = autograd.Variable(idts), autograd.Variable(idbs)
         if cuda:
@@ -52,6 +54,7 @@ def evaluate(data, model, cuda=True):
 
         text_encodings = (titles_encodings + bodies_encodings) * 0.5
         scores = score_utils.batch_cosine_similarity_eval(text_encodings, cuda=cuda).data.cpu().numpy()
+        meter.add(scores, labels)
         assert len(scores) == len(labels)
         ranks = (-scores).argsort()
         ranked_labels = labels[ranks]
@@ -61,7 +64,8 @@ def evaluate(data, model, cuda=True):
     MRR = e.MRR()*100
     P1 = e.Precision(1)*100
     P5 = e.Precision(5)*100
-    return MAP, MRR, P1, P5
+    auc5 = meter.value(max_fpr=0.05)
+    return MAP, MRR, P1, P5, auc5
 
 def train_model(model, train, dev_data, test_data, ids_corpus, batch_size, args):
     is_training=True
@@ -130,12 +134,12 @@ def train_model(model, train, dev_data, test_data, ids_corpus, batch_size, args)
         print('Train max-margin loss: {:.6f}'.format( avg_loss))
 
         print("Dev data Performance")
-        MAP, MRR, P1, P5 = evaluate(dev_data, model, args.cuda)
-        print(tabulate([[MAP, MRR, P1, P5]], headers=['MAP', 'MRR', 'P@1', 'P@5']))
+        MAP, MRR, P1, P5, auc5 = evaluate(dev_data, model, args.cuda)
+        print(tabulate([[MAP, MRR, P1, P5, auc5]], headers=['MAP', 'MRR', 'P@1', 'P@5', 'AUC0.05']))
         print()
         print("Test data Performance")
-        mapt, mrrt, p1t, p5t = evaluate(test_data, model, args.cuda)
-        print(tabulate([[mapt, mrrt, p1t, p5t]], headers=['MAP', 'MRR', 'P@1', 'P@5']))
+        mapt, mrrt, p1t, p5t, auc5t = evaluate(test_data, model, args.cuda)
+        print(tabulate([[mapt, mrrt, p1t, p5t, auc5t]], headers=['MAP', 'MRR', 'P@1', 'P@5', 'AUC0.05']))
         print()
 
         if MRR > best_MRR:

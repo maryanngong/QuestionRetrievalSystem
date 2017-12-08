@@ -1,4 +1,5 @@
 import sys
+import os
 import gzip
 import random
 from collections import Counter
@@ -8,6 +9,7 @@ import numpy as np
 import torch
 from zipfile import ZipFile
 from tqdm import tqdm
+import cPickle as pickle
 
 def say(s, stream=sys.stdout):
     stream.write(s)
@@ -38,6 +40,16 @@ def getEmbeddingTensor():
 
 def getGloveEmbeddingTensor():
     embedding_path="glove.840B.300d.zip"
+    embeddings_file = "glove_embedding_tensor.npy"
+    word_to_indx_file = "glove_word_to_indx"
+    if os.path.exists(embeddings_file) and os.path.exists(word_to_indx_file):
+        print("Loading Glove embeddings from file...")
+        embedding_tensor = np.load(embeddings_file)
+        with open(word_to_indx_file, 'rb') as f:
+            word_to_indx = pickle.load(f)
+        return embedding_tensor, word_to_indx
+
+    print("Reading Glove embeddings from zipfile. This will take a few moments...")
     with ZipFile(embedding_path) as fin:
         content = fin.read('glove.840B.300d.txt')
         lines = content.splitlines()
@@ -60,6 +72,10 @@ def getGloveEmbeddingTensor():
         embedding_tensor.append( np.ones( v_len ) * 1.0 / v_len )   
         word_to_indx["<unk>"] = len(embedding_tensor) - 1 
         embedding_tensor = np.array(embedding_tensor, dtype=np.float32)
+        print("saving embeddings to file...")
+        np.save(embeddings_file, embedding_tensor)
+        with open(word_to_indx_file, 'wb') as f:
+            pickle.dump(word_to_indx, f)
     return embedding_tensor, word_to_indx    
 
 # Helper function that constructs and index tensor given the list of text tokens
@@ -214,11 +230,18 @@ def create_eval_batches_android(ids_corpus, pos_data, neg_data, padding_id=0, pa
         titles = [ids_corpus[pid]]
         bodies = [ids_corpus[pid]]
         qlabels = []
-        for qid in list(pos_data[pid]) + list(neg_data[pid]):
+        
+        for qid in pos_data[pid]:
             t, b = ids_corpus[qid]
             titles.append(t)
             bodies.append(b)
-            qlabels.append(int(qid in pos_data[pid]))
+            qlabels.append(1)
+        for qid in neg_data[pid]:
+            t, b = ids_corpus[qid]
+            titles.append(t)
+            bodies.append(b)
+            qlabels.append(0)
+
         titles, bodies = create_one_batch(titles, bodies, padding_id, pad_left)
         lst.append((titles, bodies, np.array(qlabels)))
     return lst
