@@ -81,7 +81,8 @@ def getGloveEmbeddingTensor():
 # Helper function that constructs and index tensor given the list of text tokens
 def getIndicesTensor(text_arr, word_to_indx, max_length=100):
     nil_indx = word_to_indx["<unk>"]
-    text_indx = [ word_to_indx[x] if x in word_to_indx else nil_indx for x in text_arr][:max_length]
+    # lowercase the corpus now
+    text_indx = [ word_to_indx[x.lower()] if x in word_to_indx else nil_indx for x in text_arr][:max_length]
     x = text_indx
     return x
 
