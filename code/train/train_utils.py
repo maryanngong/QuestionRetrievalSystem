@@ -48,6 +48,7 @@ def evaluate(model_data=None, model=None, args=None, vectorizer=None, vectorizer
     results = []
     meter = AUCMeter()
     if model is not None:
+        model.eval()
         print("Computing Model Evaluation Metrics...")
         results = compute_model_rankings(model_data, model, args, meter)
     if vectorizer is not None:
@@ -144,6 +145,7 @@ def train_model(model, train, dev_data, test_data, ids_corpus, batch_size, args,
                 titles, bodies = titles.cuda(), bodies.cuda()
             if is_training:
                 optimizer.zero_grad()
+                model.train()
             # Encode all of the title and body text using model
             # squeeze dimension differs for lstm and cnn models
 
@@ -171,6 +173,7 @@ def train_model(model, train, dev_data, test_data, ids_corpus, batch_size, args,
                     titles_2, bodies_2, domains = titles_2.cuda(), bodies_2.cuda(), domains.cuda()
                 if is_training:
                     optimizer_2.zero_grad()
+                    model_2.train()
                 encode_titles_2 = model(titles_2)
                 encode_bodies_2 = model(bodies_2)
                 if 'cnn' in args.model_name:
