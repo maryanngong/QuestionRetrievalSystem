@@ -232,7 +232,7 @@ def read_annotations_android(path):
                 pid_to_qids[pid].add(qid)
     return pid_to_qids
 
-def create_batches(ids_corpus, data, batch_size, padding_id, perm=None, pad_left=True):
+def create_batches(ids_corpus, data, batch_size, padding_id, perm=None, pad_left=False):
     if perm is None:
         perm = range(len(data))
         random.shuffle(perm)
@@ -272,7 +272,7 @@ def create_batches(ids_corpus, data, batch_size, padding_id, perm=None, pad_left
             cnt = 0
     return batches
 
-def create_discriminator_batches(ids_ubuntu_corpus, ids_android_corpus, num_batches, num_samples_per=20):
+def create_discriminator_batches(ids_ubuntu_corpus, ids_android_corpus, num_batches, padding_id=0, pad_left=False, num_samples_per=20):
     batches = []
     for i in xrange(num_batches):
         titles = []
@@ -297,6 +297,7 @@ def create_discriminator_batches(ids_ubuntu_corpus, ids_android_corpus, num_batc
         titles = [titles[i] for i in perm]
         bodies = [bodies[i] for i in perm]
         labels = [labels[i] for i in perm]
+        titles, bodies = create_one_batch(titles, bodies, padding_id, pad_left)
         batches.append((titles, bodies, labels))
     return batches
 

@@ -129,7 +129,7 @@ if __name__ == '__main__':
             train = myio.read_annotations('../../askubuntu/train_random.txt')
             # Create Batch2 batches
             if args.domain_adaptation:
-                train_2 = myio.create_discriminator_batches(ids_corpus, ids_android_corpus, (len(train) / args.batch_size))
+                train_2 = myio.create_discriminator_batches(ids_corpus, ids_android_corpus, (len(train) / args.batch_size + 1))
                 train_utils.train_model(model, train, dev, test, ids_corpus, args.batch_size, args, model_2, train_2)
             else:
                 train_utils.train_model(model, train, dev, test, ids_corpus, args.batch_size, args)
