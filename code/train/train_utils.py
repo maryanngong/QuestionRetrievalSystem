@@ -180,6 +180,7 @@ def train_model(model, train, dev_data, test_data, ids_corpus, batch_size, args,
                 encoded_text = (titles_encodings_2 + bodies_encodings_2) * 0.5
                 # Run through discriminators
                 labeled_encodings_2 = model_2(encoded_text)
+                labeled_encodings_2 = torch.squeeze(labeled_encodings_2)
                 # Calculate loss 2
                 loss_2 = F.binary_cross_entropy_with_logits(labeled_encodings_2, domains)
                 # Calculate total cost
