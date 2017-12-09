@@ -39,6 +39,7 @@ parser.add_argument('-t', '--train', action='store_true', default=False, help='e
 parser.add_argument('--snapshot', type=str, default=None, help='filename of model snapshot to load[default: None]')
 parser.add_argument('--snapshot2', type=str, default=None, help='filename of discriminator model snapshot to load[default: None]')
 parser.add_argument('--save_path', type=str, default="", help='Path where to dump model')
+parser.add_argument('--results_path', type=str, default="all_results.txt", help="Path where to save best results")
 
 parser.add_argument('-a', '--android', action='store_true', default=False, help="run evaluation on android dataset")
 

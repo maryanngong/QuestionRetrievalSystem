@@ -74,11 +74,11 @@ def compute_model_rankings(data, model, args, meter):
         encode_bodies = model(bodies)
 
         if 'lstm' in args.model_name:
-            titles_encodings = average_without_padding_lstm(encode_titles, idts)
-            bodies_encodings = average_without_padding_lstm(encode_bodies, idbs)
+            titles_encodings = average_without_padding_lstm(encode_titles, idts, cuda=args.cuda)
+            bodies_encodings = average_without_padding_lstm(encode_bodies, idbs, cuda=args.cuda)
         else:
-            titles_encodings = average_without_padding_cnn(encode_titles, idts)
-            bodies_encodings = average_without_padding_cnn(encode_bodies, idbs)
+            titles_encodings = average_without_padding_cnn(encode_titles, idts, cuda=args.cuda)
+            bodies_encodings = average_without_padding_cnn(encode_bodies, idbs, cuda=args.cuda)
 
         text_encodings = (titles_encodings + bodies_encodings) * 0.5
         scores = score_utils.batch_cosine_similarity_eval(text_encodings, cuda=args.cuda).data.cpu().numpy()
@@ -111,6 +111,8 @@ def compute_tfidf_rankings(data, vectorizer, meter):
 
 def train_model(model, train, dev_data, test_data, ids_corpus, batch_size, args, model_2=None, train_batches_2=None):
     is_training=True
+    best_metrics_dev = []
+    best_metrics_test = []
     if args.cuda:
         model = model.cuda()
     parameters = ifilter(lambda p: p.requires_grad, model.parameters())
@@ -149,11 +151,11 @@ def train_model(model, train, dev_data, test_data, ids_corpus, batch_size, args,
             encode_bodies = model(bodies)
 
             if 'cnn' in args.model_name:
-                titles_encodings = average_without_padding_cnn(encode_titles, t)
-                bodies_encodings = average_without_padding_cnn(encode_bodies, b)
+                titles_encodings = average_without_padding_cnn(encode_titles, t, cuda=args.cuda)
+                bodies_encodings = average_without_padding_cnn(encode_bodies, b, cuda=args.cuda)
             else:
-                titles_encodings = average_without_padding_lstm(encode_titles, t)
-                bodies_encodings = average_without_padding_lstm(encode_bodies, b)
+                titles_encodings = average_without_padding_lstm(encode_titles, t, cuda=args.cuda)
+                bodies_encodings = average_without_padding_lstm(encode_bodies, b, cuda=args.cuda)
 
             text_encodings = (titles_encodings + bodies_encodings) * 0.5
 
@@ -168,15 +170,15 @@ def train_model(model, train, dev_data, test_data, ids_corpus, batch_size, args,
                 if args.cuda:
                     titles_2, bodies_2, domains = titles_2.cuda(), bodies_2.cuda(), domains.cuda()
                 if is_training:
-                    optimizer.zero_grad()
+                    optimizer_2.zero_grad()
                 encode_titles_2 = model(titles_2)
                 encode_bodies_2 = model(bodies_2)
                 if 'cnn' in args.model_name:
-                    titles_encodings_2 = average_without_padding_cnn(encode_titles_2, t2)
-                    bodies_encodings_2 = average_without_padding_cnn(encode_bodies_2, b2)
+                    titles_encodings_2 = average_without_padding_cnn(encode_titles_2, t2, cuda=args.cuda)
+                    bodies_encodings_2 = average_without_padding_cnn(encode_bodies_2, b2, cuda=args.cuda)
                 else:
-                    titles_encodings_2 = average_without_padding_lstm(encode_titles_2, t2)
-                    bodies_encodings_2 = average_without_padding_lstm(encode_bodies_2, b2)
+                    titles_encodings_2 = average_without_padding_lstm(encode_titles_2, t2, cuda=args.cuda)
+                    bodies_encodings_2 = average_without_padding_lstm(encode_bodies_2, b2, cuda=args.cuda)
                 encoded_text = (titles_encodings_2 + bodies_encodings_2) * 0.5
                 # Run through discriminators
                 labeled_encodings_2 = model_2(encoded_text)
@@ -226,6 +228,8 @@ def train_model(model, train, dev_data, test_data, ids_corpus, batch_size, args,
             MRR = auc5
         if MRR > best_MRR:
             best_MRR = MRR
+            best_metrics_dev = [MAP, MRR, P1, P5, auc5]
+            best_metrics_test = [mapt, mrrt, p1t, p5t, auc5t]
             best_epoch = epoch
             # Save model
             torch.save(model, args.save_path+"_size"+str(args.num_hidden)+"_epoch_best")
@@ -235,6 +239,7 @@ def train_model(model, train, dev_data, test_data, ids_corpus, batch_size, args,
 
         print("Best EPOCH so far:", best_epoch, best_MRR)
         print()
+    myio.record_best_results(args, best_metrics_dev, best_metrics_test, best_epoch)
 
 # same as compile_rankings function except it already has positive and negative labels passed as qlabels
 # also only handles one minibatch
