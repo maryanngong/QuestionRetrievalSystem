@@ -297,7 +297,7 @@ def create_discriminator_batches(ids_ubuntu_corpus, ids_android_corpus, num_batc
         bodies = [bodies[perm[i]] for i in perm]
         labels = [labels[perm[i]] for i in perm]
         batches.append((titles, bodies, labels))
-    return samples
+    return batches
 
 def create_eval_batches(ids_corpus, data, padding_id, pad_left):
     lst = [ ]
