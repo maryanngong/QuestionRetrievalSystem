@@ -109,7 +109,7 @@ def compute_tfidf_rankings(data, vectorizer, meter):
     return res
 
 
-def train_model(model, train, dev_data, test_data, ids_corpus, batch_size, args):
+def train_model(model, train, dev_data, test_data, ids_corpus, batch_size, args, train_batches_2=None):
     is_training=True
     if args.cuda:
         model = model.cuda()
@@ -152,8 +152,22 @@ def train_model(model, train, dev_data, test_data, ids_corpus, batch_size, args)
 
             # Calculate Loss = Multi-Margin-Loss(train_group_ids, text_encodings)
             scores, target_indices = score_utils.batch_cosine_similarity(text_encodings, train_group_ids, args.cuda)
-
             loss = F.multi_margin_loss(scores, target_indices, margin=args.margin)
+
+            # Batch 2
+            if args.domain_adaptation:
+                t2, b2, domain = train_batches_2[i]
+                titles_2, bodies_2 = autograd.Variable(t2), autograd.Variable(b2)
+                if args.cuda:
+                    titles_2, bodies_2 = titles_2.cuda(), bodies_2.cuda()
+                if is_training:
+                    optimizer.zero_grad()
+                encode_titles_2 = model(titles_2)
+                encode_bodies_2 = model(bodies_2)
+                # Run through discriminators
+                # Calculate loss 2
+                # Calculate total cost
+
             if is_training:
                 loss.backward()
                 optimizer.step()

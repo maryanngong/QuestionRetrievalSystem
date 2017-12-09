@@ -272,6 +272,24 @@ def create_batches(ids_corpus, data, batch_size, padding_id, perm=None, pad_left
             cnt = 0
     return batches
 
+def create_discriminator_batches(ids_ubuntu_corpus, ids_android_corpus, num_batches, num_samples_per=20):
+    batches = []
+    for i in xrange(num_batches):
+        samples = []
+        for j in xrange(num_samples_per):
+            random_index = random.randrange(len(ids_ubuntu_corpus))
+            key = ids_ubuntu_corpus.keys()[random_index]
+            sample = ids_ubuntu_corpus[key]
+            samples.append((sample[0], sample[1], 0))
+        for k in xrange(num_samples_per):
+            random_index = random.randrange(len(ids_android_corpus))
+            key = ids_android_corpus.keys()[random_index]
+            s = ids_android_corpus[key]
+            samples.append((sample[0], sample[1], 1))
+        samples = random.shuffle(samples)
+        batches.append(samples)
+    return samples
+
 def create_eval_batches(ids_corpus, data, padding_id, pad_left):
     lst = [ ]
     for pid, qids, qlabels in data:

@@ -17,7 +17,7 @@ from tabulate import tabulate
 
 parser = argparse.ArgumentParser(description='Question Retrieval Model')
 # task
-parser.add_argument('--transfer_task', action='store_true', default=False, help='choose transfer setting (ubuntu->android)')
+parser.add_argument('--domain_adaptation', action='store_true', default=False, help='choose adaptation transfer setting')
 # learning
 parser.add_argument('--lr', type=float, default=0.001, help='initial learning rate [default: 0.001]')
 parser.add_argument('--epochs', type=int, default=256, help='number of epochs for train [default: 256]')
@@ -117,7 +117,12 @@ if __name__ == '__main__':
 
         if args.train :
             train = myio.read_annotations('../../askubuntu/train_random.txt')
-            train_utils.train_model(model, train, dev, test, ids_corpus, args.batch_size, args)
+            # Create Batch2 batches
+            if args.domain_adaptation:
+                train_2 = myio.create_discriminator_batches(ids_corpus, ids_android_corpus, (len(train) / args.batch_size))
+                train_utils.train_model(model, train, dev, test, ids_corpus, args.batch_size, args, train_2)
+            else:
+                train_utils.train_model(model, train, dev, test, ids_corpus, args.batch_size, args)
 
         else:
             print("Evaluating performance on dev data...")
