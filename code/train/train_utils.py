@@ -164,7 +164,7 @@ def train_model(model, train, dev_data, test_data, ids_corpus, batch_size, args,
             # Batch 2
             if args.domain_adaptation:
                 t2, b2, domains = train_batches_2[i]
-                titles_2, bodies_2, domains = autograd.Variable(t2), autograd.Variable(b2), autograd.Variable(torch.LongTensor(domains), requires_grad=False)
+                titles_2, bodies_2, domains = autograd.Variable(t2), autograd.Variable(b2), autograd.Variable(torch.FloatTensor(domains), requires_grad=False)
                 if args.cuda:
                     titles_2, bodies_2 = titles_2.cuda(), bodies_2.cuda()
                 if is_training:
@@ -200,6 +200,8 @@ def train_model(model, train, dev_data, test_data, ids_corpus, batch_size, args,
 
         if epoch % 2 == 0 and len(args.save_path) > 0:
             torch.save(model, args.save_path+"_size"+str(args.num_hidden)+"_epoch"+str(epoch))
+            if args.domain_adaptation:
+                torch.save(model_2, args.save_path+"_size"+str(args.num_hidden)+"_epoch"+str(epoch)+"_discriminator")
         # Evaluation Metrics
         precision_at_1 = eval_utils.precision_at_k(all_results, 1)*100
         precision_at_5 = eval_utils.precision_at_k(all_results, 5)*100
@@ -226,6 +228,8 @@ def train_model(model, train, dev_data, test_data, ids_corpus, batch_size, args,
             best_epoch = epoch
             # Save model
             torch.save(model, args.save_path+"_size"+str(args.num_hidden)+"_epoch_best")
+            if args.domain_adaptation:
+                torch.save(model_2, args.save_path+"_size"+str(args.num_hidden)+"_epoch_best_discriminator")
 
 
         print("Best EPOCH so far:", best_epoch, best_MRR)
