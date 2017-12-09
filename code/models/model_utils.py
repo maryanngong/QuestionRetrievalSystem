@@ -26,6 +26,8 @@ def get_model(embeddings, args):
         return LSTM_bi_fc(embeddings, args)
     elif args.model_name == 'lstm3':
         return LSTM3(embeddings, args)
+    elif args.model_name_2 == 'ffn':
+        return FFN(args)
     else:
         raise Exception("Model name {} not supported!".format(args.model_name))
 
@@ -209,3 +211,16 @@ class LSTM_bi_fc(nn.Module):
         output, (h_n, c_n) = self.rnn(all_x, (h0, c0))
         output = self.tanh(self.fc(output))
         return output
+
+class FFN(nn.Module):
+
+    def __init__(self, args):
+        super(FFN, self).__init__()
+        self.args = args
+        self.fc1 = nn.Linear(args.num_hidden, 100)
+        self.fc2 = nn.Linear(100, 1)
+
+    def forward(self, x_indx):
+        hidden = self.fc1(x_indx)
+        out = self.fc2(hidden)
+        return out

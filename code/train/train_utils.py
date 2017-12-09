@@ -109,13 +109,20 @@ def compute_tfidf_rankings(data, vectorizer, meter):
     return res
 
 
-def train_model(model, train, dev_data, test_data, ids_corpus, batch_size, args, train_batches_2=None):
+def train_model(model, train, dev_data, test_data, ids_corpus, batch_size, args, model_2=None, train_batches_2=None):
     is_training=True
     if args.cuda:
         model = model.cuda()
     parameters = ifilter(lambda p: p.requires_grad, model.parameters())
     optimizer = torch.optim.Adam(parameters , lr=args.lr)
     model.train()
+
+    if args.domain_adaptation:
+        if args.cuda:
+            model_2 = model_2.cuda()
+        parameters_2 = ifilter(lambda p: p.requires_grad, model_2.parameters())
+        optimizer_2 = torch.optim.Adam(parameters_2, lr=args.lr2)
+        model_2.train()
 
     best_epoch = 0
     best_MRR = 0
@@ -164,16 +171,29 @@ def train_model(model, train, dev_data, test_data, ids_corpus, batch_size, args,
                     optimizer.zero_grad()
                 encode_titles_2 = model(titles_2)
                 encode_bodies_2 = model(bodies_2)
+                if 'cnn' in args.model_name:
+                    titles_encodings_2 = average_without_padding_cnn(encode_titles_2, t2)
+                    bodies_encodings_2 = average_without_padding_cnn(encode_bodies_2, b2)
+                else:
+                    titles_encodings_2 = average_without_padding_lstm(encode_titles_2, t2)
+                    bodies_encodings_2 = average_without_padding_lstm(encode_bodies_2, b2)
+                encoded_text = (titles_encodings_2 + bodies_encodings_2) * 0.5
                 # Run through discriminators
+                labeled_encodings_2 = model_2(encoded_text)
                 # Calculate loss 2
+                loss_2 = F.binary_cross_entropy_with_logits(labeled_encodings_2, domains)
                 # Calculate total cost
-
-            if is_training:
+                total_cost = loss - (args.lam * loss_2)
+                total_cost.backward()
+                optimizer.step()
+                optimizer_2.step()
+                losses.append(total_cost.cpu().data[0])
+            else:
                 loss.backward()
                 optimizer.step()
-            losses.append(loss.cpu().data[0])
+                losses.append(loss.cpu().data[0])
             print("BATCH LOSS "+str(i+1)+" out of "+str(N)+": ")
-            print(loss.cpu().data[0])
+            print(losses[-1])
             rankings = compile_rankings(train_group_ids, scores.cpu().data.numpy())
             results = strip_ids_and_scores(rankings)
             all_results += results
