@@ -37,17 +37,24 @@ def getEmbeddingTensor(embedding_path):
     embedding_tensor = np.array(embedding_tensor, dtype=np.float32)
     return embedding_tensor, word_to_indx
 
-def getGloveEmbeddingTensor(prune=False, corpuses=None):
-    if prune:
+def getGloveEmbeddingTensor(prune=False, cased=False, corpuses=None):
+    if cased:
+        lowercase_prefix=""
         embedding_path="../data/glove.840B.300d.zip"
-        embeddings_file = "../data/glove_embedding_tensor_pruned.npy"
-        word_to_indx_file = "../data/glove_word_to_indx_pruned"
     else:
-        embedding_path="../data/glove.840B.300d.zip"
-        embeddings_file = "../data/glove_embedding_tensor.npy"
-        word_to_indx_file = "../data/glove_word_to_indx"
+        print("using lowercase embeddings...")
+        lowercase_prefix="lowercase_"
+        embedding_path="../data/glove.42B.300d.zip"
+
+    if prune:
+        print("pruning embeddings")
+        embeddings_file = "../data/"+lowercase_prefix+"glove_embedding_tensor_pruned.npy"
+        word_to_indx_file = "../data/"+lowercase_prefix+"glove_word_to_indx_pruned"
+    else:
+        embeddings_file = "../data/"+lowercase_prefix+"glove_embedding_tensor.npy"
+        word_to_indx_file = "../data/"+lowercase_prefix+"glove_word_to_indx"
     if os.path.exists(embeddings_file) and os.path.exists(word_to_indx_file):
-        print("Loading Glove embeddings from file...")
+        print("Loading " + lowercase_prefix+"Glove embeddings from file...")
         embedding_tensor = np.load(embeddings_file)
         with open(word_to_indx_file, 'rb') as f:
             word_to_indx = pickle.load(f)
@@ -58,7 +65,8 @@ def getGloveEmbeddingTensor(prune=False, corpuses=None):
     if prune:
         all_tokens = get_all_tokens(corpuses)
     with ZipFile(embedding_path) as fin:
-        content = fin.read('glove.840B.300d.txt')
+        embed_filename = embedding_path[8:-4]+'.txt'
+        content = fin.read(embed_filename)
         lines = content.splitlines()
 
         embedding_tensor = []
