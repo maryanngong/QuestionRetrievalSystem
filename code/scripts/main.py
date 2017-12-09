@@ -26,6 +26,7 @@ parser.add_argument('--batch_size', type=int, default=32, help='batch size for t
 parser.add_argument('--lam', type=float, default=0.0001, help='constant multiplier on loss 2 in domain adaptation')
 # data
 parser.add_argument('--embeddings_path', type=str, default='../../askubuntu/vector/vectors_pruned.200.txt.gz', help='path for word embeddings')
+parser.add_argument('--cased', action='store_true', default=False, help="use cased glove embeddings")
 # model
 parser.add_argument('--model_name', nargs="?", type=str, default='dan', choices=['dan', 'cnn2', 'cnn3', 'cnn4', 'lstm_bi', 'lstm_bi_fc', 'lstm3', 'tfidf'], help="Encoder model type [dan, cnn2, cnn3, cnn4, lstm_bi, lstm_bi_fc, lstm3]")
 parser.add_argument('--model_name_2', nargs="?", type=str, default='ffn', choices=['ffn'], help="Discriminator model type")
@@ -88,7 +89,7 @@ if __name__ == '__main__':
 
     else:
         if args.android:
-            embeddings, word_to_indx = myio.getGloveEmbeddingTensor(prune=True)
+            embeddings, word_to_indx = myio.getGloveEmbeddingTensor(prune=True, cased=args.cased)
         else:
             embeddings, word_to_indx = myio.getEmbeddingTensor(args.embeddings_path)
         raw_corpus = myio.read_corpus(askubuntu_corpus)
