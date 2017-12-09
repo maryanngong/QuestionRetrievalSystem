@@ -17,7 +17,7 @@ from tabulate import tabulate
 
 parser = argparse.ArgumentParser(description='Question Retrieval Model')
 # task
-parser.add_argument('--domain_adaptation', action='store_true', default=False, help='choose adaptation transfer setting')
+parser.add_argument('-d', '--domain_adaptation', action='store_true', default=False, help='choose adaptation transfer setting')
 # learning
 parser.add_argument('--lr', type=float, default=0.001, help='initial learning rate [default: 0.001]')
 parser.add_argument('--lr2', type=float, default=-0.001, help='initial learning rate [default: -0.001]')
@@ -40,7 +40,7 @@ parser.add_argument('--snapshot', type=str, default=None, help='filename of mode
 parser.add_argument('--snapshot2', type=str, default=None, help='filename of discriminator model snapshot to load[default: None]')
 parser.add_argument('--save_path', type=str, default="", help='Path where to dump model')
 
-parser.add_argument('--android', action='store_true', default=False, help="run evaluation on android dataset")
+parser.add_argument('-a', '--android', action='store_true', default=False, help="run evaluation on android dataset")
 
 args = parser.parse_args()
 
@@ -97,7 +97,7 @@ if __name__ == '__main__':
         if args.snapshot is None:
             model = model_utils.get_model(embeddings, args)
             if args.domain_adaptation:
-                model_2 = model_utils.get_model(None, args)
+                model_2 = model_utils.get_model(None, args, True)
         else :
             print('\nLoading model from [%s]...' % args.snapshot)
             try:

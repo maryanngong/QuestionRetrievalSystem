@@ -11,11 +11,11 @@ import pdb
 
 
 # Depending on arg, build dataset
-def get_model(embeddings, args):
+def get_model(embeddings, args, is_model_2=False):
     print("\nBuilding model...")
 
-    if args.model_name == 'dan':
-        return DAN(embeddings, args)
+    if is_model_2 and args.model_name_2 == 'ffn':
+        return FFN(args)
     elif args.model_name == 'cnn2':
         return CNN2(embeddings, args)
     elif args.model_name == 'cnn3':
@@ -26,8 +26,6 @@ def get_model(embeddings, args):
         return LSTM_bi_fc(embeddings, args)
     elif args.model_name == 'lstm3':
         return LSTM3(embeddings, args)
-    elif args.model_name_2 == 'ffn':
-        return FFN(args)
     else:
         raise Exception("Model name {} not supported!".format(args.model_name))
 
