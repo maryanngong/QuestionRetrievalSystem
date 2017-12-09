@@ -292,7 +292,8 @@ def create_discriminator_batches(ids_ubuntu_corpus, ids_android_corpus, num_batc
             titles.append(sample[0])
             bodies.append(sample[1])
             labels.append(1)
-        perm = random.shuffle(range(len(titles)))
+        perm = range(len(titles))
+        random.shuffle(perm)
         titles = [titles[i] for i in perm]
         bodies = [bodies[i] for i in perm]
         labels = [labels[i] for i in perm]
