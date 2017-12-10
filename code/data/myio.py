@@ -126,7 +126,6 @@ def getIndicesTensor(text_arr, word_to_indx, max_length=100):
             count_unk += 1
         count_total += 1
         text_indx.append(x_indx)
-    print("Number of words that only exist in unk, total:", count_unk, count_total)
     return text_indx[:max_length]
 
 
