@@ -119,17 +119,13 @@ def getIndicesTensor(text_arr, word_to_indx, max_length=100):
     count_unk = 0
     for x in text_arr:
         x_indx = nil_indx
-        if x in word_to_indx:
-            if x.lower() in word_to_indx:
-                x_indx = word_to_indx[x.lower()]
-            else:
-                x_indx = word_to_indx[x]
-                count_upper += 1
+        if x.lower() in word_to_indx:
+            x_indx = word_to_indx[x.lower()]
         else:
             count_unk += 1
         count_total += 1
         text_indx.append(x_indx)
-    print("Number of words that only exist in uppercase, unk, total:", count_upper, count_unk, count_total)
+    print("Number of words that only exist in unk, total:", count_unk, count_total)
     return text_indx[:max_length]
 
 
