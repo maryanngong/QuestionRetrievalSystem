@@ -15,7 +15,7 @@ from itertools import ifilter
 from evaluation import Evaluation
 import data.myio as myio
 from meter import AUCMeter
-
+from sklearn.metrics import accuracy_score
 
 # Takes in raw dataset and masks out padding and then takes sum average for LSTM
 def average_without_padding_lstm(x, ids, eps=1e-8, padding_id=0, cuda=True):
@@ -48,6 +48,7 @@ def evaluate(model_data=None, model=None, args=None, vectorizer=None, vectorizer
     results = []
     meter = AUCMeter()
     if model is not None:
+        model.eval()
         print("Computing Model Evaluation Metrics...")
         results = compute_model_rankings(model_data, model, args, meter)
     if vectorizer is not None:
@@ -143,6 +144,7 @@ def train_model(model, train, dev_data, test_data, ids_corpus, batch_size, args,
             if args.cuda:
                 titles, bodies = titles.cuda(), bodies.cuda()
             if is_training:
+                model.train()
                 optimizer.zero_grad()
             # Encode all of the title and body text using model
             # squeeze dimension differs for lstm and cnn models
@@ -170,6 +172,7 @@ def train_model(model, train, dev_data, test_data, ids_corpus, batch_size, args,
                 if args.cuda:
                     titles_2, bodies_2, domains = titles_2.cuda(), bodies_2.cuda(), domains.cuda()
                 if is_training:
+                    model_2.train()
                     optimizer_2.zero_grad()
                 encode_titles_2 = model(titles_2)
                 encode_bodies_2 = model(bodies_2)
@@ -185,6 +188,12 @@ def train_model(model, train, dev_data, test_data, ids_corpus, batch_size, args,
                 labeled_encodings_2 = torch.squeeze(labeled_encodings_2)
                 # Calculate loss 2
                 loss_2 = F.binary_cross_entropy_with_logits(labeled_encodings_2, domains)
+                
+                if args.show_discr_loss:
+                    print("discriminator loss: ", loss_2)
+                    preds = labeled_encodings_2 >= 0.5
+                    acc = accuracy_score(d, preds.cpu().data.numpy())
+                    print("Discriminator accuracy:", acc)
                 # Calculate total cost
                 total_cost = loss - (args.lam * loss_2)
                 total_cost.backward()

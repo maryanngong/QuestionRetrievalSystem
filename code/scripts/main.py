@@ -29,7 +29,7 @@ parser.add_argument('--embeddings_path', type=str, default='../../askubuntu/vect
 parser.add_argument('--cased', action='store_true', default=False, help="use cased glove embeddings")
 # model
 parser.add_argument('--model_name', nargs="?", type=str, default='dan', choices=['dan', 'cnn2', 'cnn3', 'cnn4', 'lstm_bi', 'lstm_bi_fc', 'lstm3', 'tfidf'], help="Encoder model type [dan, cnn2, cnn3, cnn4, lstm_bi, lstm_bi_fc, lstm3]")
-parser.add_argument('--model_name_2', nargs="?", type=str, default='ffn', choices=['ffn'], help="Discriminator model type")
+parser.add_argument('--model_name_2', nargs="?", type=str, default='ffn', choices=['ffn', 'ffn2'], help="Discriminator model type")
 parser.add_argument('--num_hidden', type=int, default=32, help="encoding size.")
 parser.add_argument('--dropout', type=float, default=0.0, help="dropout parameter")
 parser.add_argument('--margin', type=float, default=1.0)
@@ -43,6 +43,7 @@ parser.add_argument('--save_path', type=str, default="", help='Path where to dum
 parser.add_argument('--results_path', type=str, default="all_results.txt", help="Path where to save best results")
 
 parser.add_argument('-a', '--android', action='store_true', default=False, help="run evaluation on android dataset")
+parser.add_argument('--show_discr_loss', action='store_true', default=False, help="print out discriminator loss and accuracy each batch")
 
 args = parser.parse_args()
 
