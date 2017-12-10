@@ -110,9 +110,13 @@ def compute_tfidf_rankings(data, vectorizer, meter):
     return res
 
 
-def train_model(model, train, dev_data, test_data, ids_corpus, batch_size, args, model_2=None, train_batches_2=None, results_lock=None, gpu=0):
+def train_model(model, train, dev_data, test_data, ids_corpus, batch_size, args, model_2=None, train_batches_2=None, results_lock=None):
     if args.cuda:
-        torch.cuda.device(gpu)
+        print ('Available devices ', torch.cuda.device_count())
+        print ('Current cuda device ', torch.cuda.current_device())
+        print("SETTING DEVICE TO " + str(args.gpuid))
+        torch.cuda.set_device(args.gpuid)
+        print ('Current cuda device ', torch.cuda.current_device())
     is_training=True
     best_metrics_dev = []
     best_metrics_test = []
