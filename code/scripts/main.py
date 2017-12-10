@@ -165,6 +165,7 @@ if __name__ == '__main__':
 
 
     if args.hyperparam_search:
+        processes = []
         manager = multiprocessing.Manager()
         results_lock = Lock()
         tunable_params = ['lr', 'lam', 'num_hidden', 'dropout', 'margin']
@@ -173,6 +174,9 @@ if __name__ == '__main__':
         random_params = []
         for gpu in range(4):
             process_args = manager.Namespace(**(copy.deepcopy(vars(args))))
-            Process(target=try_random_params, args=(process_args, gpu, results_lock)).start()
+            processes[i] = Process(target=try_random_params, args=(process_args, gpu, results_lock))
+            processes[i].start()
+        for process in processes:
+            process.join()
     else:
         main(args)
