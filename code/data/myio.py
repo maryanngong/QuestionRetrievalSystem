@@ -3,6 +3,7 @@ import os
 import gzip
 import random
 from collections import Counter
+from tabulate import tabulate
 
 from sklearn.feature_extraction.text import TfidfVectorizer
 import numpy as np
@@ -132,7 +133,7 @@ def getIndicesTensor(text_arr, word_to_indx, max_length=100):
             count_unk += 1
         count_total += 1
         text_indx.append(x_indx)
-    # print("Number of words that only exist in uppercase, unk, total:", count_upper, count_unk, count_total)
+    print("Number of words that only exist in unk, total:", count_unk, count_total)
     return text_indx[:max_length]
 
 
@@ -415,7 +416,7 @@ def create_hinge_batch(triples):
     return triples
 
 def record_best_results(args, best_metrics_dev, best_metrics_test, best_epoch=0):
-    with open(args.results_path, 'a') as r:
+    with open(args.results_path, 'ab') as r:
         r.write(tabulate([' '] + best_metrics_dev + [' '] + best_metrics_test, headers=['Dev', 'MAP', 'MRR', 'P@1', 'P@5', 'AUC0.05', 'Test', 'MAP', 'MRR', 'P@1', 'P@5', 'AUC0.05']))
         r.write('\n\n')
 

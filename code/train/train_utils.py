@@ -146,6 +146,7 @@ def train_model(model, train, dev_data, test_data, ids_corpus, batch_size, args,
             if is_training:
                 model.train()
                 optimizer.zero_grad()
+                model.train()
             # Encode all of the title and body text using model
             # squeeze dimension differs for lstm and cnn models
 
@@ -174,6 +175,7 @@ def train_model(model, train, dev_data, test_data, ids_corpus, batch_size, args,
                 if is_training:
                     model_2.train()
                     optimizer_2.zero_grad()
+                    model_2.train()
                 encode_titles_2 = model(titles_2)
                 encode_bodies_2 = model(bodies_2)
                 if 'cnn' in args.model_name:
