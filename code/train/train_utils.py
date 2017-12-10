@@ -251,11 +251,11 @@ def train_model(model, train, dev_data, test_data, ids_corpus, batch_size, args,
     if results_lock:
         results_lock.acquire()
         try:
-            myio.record_best_results(args, best_metrics_dev, best_metrics_test, best_epoch)
+            myio.record_best_results(args.results_path, args.save_path+"_args_"+serialize_model_name(args), best_metrics_dev, best_metrics_test, best_epoch)
         finally:
             results_lock.release()
     else:
-        myio.record_best_results(args, best_metrics_dev, best_metrics_test, best_epoch)
+        myio.record_best_results(args.results_path, args.save_path+"_args_"+serialize_model_name(args), best_metrics_dev, best_metrics_test, best_epoch)
 
 # same as compile_rankings function except it already has positive and negative labels passed as qlabels
 # also only handles one minibatch
