@@ -416,8 +416,8 @@ def create_hinge_batch(triples):
 
 def record_best_results(path, name, best_metrics_dev, best_metrics_test, best_epoch=0):
     with open(str(path), 'a') as r:
-        r.write("MODEL: " + name)
-        r.write('peak epoch: ' + str(best_epoch))
+        r.write("MODEL: " + name + '\n')
+        r.write('peak epoch: ' + str(best_epoch) + '\n')
         row = [' '] + best_metrics_dev + [' '] + best_metrics_test
         r.write(tabulate([row], headers=['Dev', 'MAP', 'MRR', 'P@1', 'P@5', 'AUC0.05', 'Test', 'MAP', 'MRR', 'P@1', 'P@5', 'AUC0.05']))
         r.write('\n\n')
