@@ -11,6 +11,8 @@ import torch
 from zipfile import ZipFile
 from tqdm import tqdm
 import cPickle as pickle
+from tabulate import tabulate
+
 
 def say(s, stream=sys.stdout):
     stream.write(s)
@@ -55,6 +57,7 @@ def getGloveEmbeddingTensor(prune=False, cased=False, corpuses=None):
         embeddings_file = "../data/"+lowercase_prefix+"glove_embedding_tensor.npy"
         word_to_indx_file = "../data/"+lowercase_prefix+"glove_word_to_indx"
     if os.path.exists(embeddings_file) and os.path.exists(word_to_indx_file):
+        print("filenames", word_to_indx_file, embeddings_file)
         print("Loading " + lowercase_prefix+"Glove embeddings from file...")
         embedding_tensor = np.load(embeddings_file)
         with open(word_to_indx_file, 'rb') as f:
@@ -120,8 +123,12 @@ def getIndicesTensor(text_arr, word_to_indx, max_length=100):
     count_unk = 0
     for x in text_arr:
         x_indx = nil_indx
-        if x.lower() in word_to_indx:
-            x_indx = word_to_indx[x.lower()]
+        if x in word_to_indx or x.lower() in word_to_indx:
+            if x.lower() in word_to_indx:
+                x_indx = word_to_indx[x.lower()]
+            else:
+                x_indx = word_to_indx[x]
+                count_upper += 1
         else:
             count_unk += 1
         count_total += 1

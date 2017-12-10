@@ -16,6 +16,8 @@ def get_model(embeddings, args, is_model_2=False):
 
     if is_model_2 and args.model_name_2 == 'ffn':
         return FFN(args)
+    elif is_model_2 and args.model_name_2 == 'ffn2':
+        return FFN2(args)
     elif args.model_name == 'cnn2':
         return CNN2(embeddings, args)
     elif args.model_name == 'cnn3':
@@ -222,3 +224,21 @@ class FFN(nn.Module):
         hidden = self.fc1(x_indx)
         out = self.fc2(hidden)
         return out
+
+class FFN2(nn.Module):
+
+    def __init__(self, args):
+        super(FFN2, self).__init__()
+        self.args = args
+        self.fc1 = nn.Linear(args.num_hidden, 300)
+        self.relu = nn.ReLU()
+        self.fc2 = nn.Linear(300, 150)
+        self.fc3 = nn.Linear(150, 1)
+        self.sig = nn.Sigmoid()
+
+    def forward(self, x_indx):
+        hidden = self.fc1(x_indx)
+        out = self.fc2(hidden)
+        out = self.relu(out)
+        out = self.fc3(out)
+        return self.sig(out)

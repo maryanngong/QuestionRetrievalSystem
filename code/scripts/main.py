@@ -161,6 +161,8 @@ if __name__ == '__main__':
     parser.add_argument('--gpuid', type=int, default=0, help="set cuda device for torch")
     parser.add_argument('--hyperparam_search', action='store_true', default=False, help="search over possible hp combos")
 
+    parser.add_argument('--show_discr_loss', action='store_true', default=False, help="print out discriminator loss and accuracy each batch")
+
     args = parser.parse_args()
 
 
