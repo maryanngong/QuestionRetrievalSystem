@@ -157,7 +157,7 @@ if __name__ == '__main__':
 
     parser.add_argument('-a', '--android', action='store_true', default=False, help="run evaluation on android dataset")
     parser.add_argument('--gpuid', type=int, default=0, help="set cuda device for torch")
-    parser.add_argument('-h', '--hyperparam_search', action='store_true', default=False, help="search over possible hp combos")
+    parser.add_argument('--hyperparam_search', action='store_true', default=False, help="search over possible hp combos")
 
     args = parser.parse_args()
 
