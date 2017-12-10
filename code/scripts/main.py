@@ -174,8 +174,8 @@ if __name__ == '__main__':
         random_params = []
         for gpu in range(4):
             process_args = manager.Namespace(**(copy.deepcopy(vars(args))))
-            processes[i] = Process(target=try_random_params, args=(process_args, gpu, results_lock))
-            processes[i].start()
+            processes.append(Process(target=try_random_params, args=(process_args, gpu, results_lock)))
+            processes[len(processes)].start()
         for process in processes:
             process.join()
     else:
