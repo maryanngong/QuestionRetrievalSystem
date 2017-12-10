@@ -318,8 +318,8 @@ def strip_ids_and_scores(rankings):
 def serialize_model_name(args):
     name = "_da-" + str(args.domain_adaptation) + "_lr-" + str(args.lr) + "_hidden-" + str(args.num_hidden) + "_drop-" + str(args.dropout) + "_marg" + str(args.margin)
     if args.domain_adaptation:
-        name.append("_lam" + str(args.lam))
-    name.append("_")
+        name += "_lam" + str(args.lam)
+    name += "_"
     return name
 
 if __name__ == '__main__':
