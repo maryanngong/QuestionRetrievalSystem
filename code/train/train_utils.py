@@ -207,9 +207,9 @@ def train_model(model, train, dev_data, test_data, ids_corpus, batch_size, args,
             all_results += results
 
         if epoch % 2 == 0 and len(args.save_path) > 0:
-            torch.save(model, args.save_path+"_size"+str(args.num_hidden)+"_epoch"+str(epoch))
+            torch.save(model, args.save_path+"_args_"+str(vars(args))+"_epoch"+str(epoch)+'.pt')
             if args.domain_adaptation:
-                torch.save(model_2, args.save_path+"_size"+str(args.num_hidden)+"_epoch"+str(epoch)+"_discriminator")
+                torch.save(model_2, args.save_path+"_args_"+str(vars(args))+"_epoch"+str(epoch)+"_discriminator.pt")
         # Evaluation Metrics
         precision_at_1 = eval_utils.precision_at_k(all_results, 1)*100
         precision_at_5 = eval_utils.precision_at_k(all_results, 5)*100
@@ -237,9 +237,9 @@ def train_model(model, train, dev_data, test_data, ids_corpus, batch_size, args,
             best_metrics_test = [mapt, mrrt, p1t, p5t, auc5t]
             best_epoch = epoch
             # Save model
-            torch.save(model, args.save_path+"_size"+str(args.num_hidden)+"_epoch_best")
+            torch.save(model, args.save_path+"_args_"+str(vars(args))+"_epoch_best.pt")
             if args.domain_adaptation:
-                torch.save(model_2, args.save_path+"_size"+str(args.num_hidden)+"_epoch_best_discriminator")
+                torch.save(model_2, args.save_path+"_args_"+str(vars(args))+"_epoch_best_discriminator.pt")
 
 
         print("Best EPOCH so far:", best_epoch, best_MRR)
