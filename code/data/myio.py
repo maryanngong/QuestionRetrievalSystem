@@ -3,6 +3,7 @@ import os
 import gzip
 import random
 from collections import Counter
+from tabulate import tabulate
 
 from sklearn.feature_extraction.text import TfidfVectorizer
 import numpy as np
