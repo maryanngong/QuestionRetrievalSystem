@@ -14,6 +14,7 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from tabulate import tabulate
 import random
 from multiprocessing import Process, Lock
+import copy
 
 
 def main(args, results_lock=None):
@@ -169,7 +170,7 @@ if __name__ == '__main__':
         param_specs = {'lr':(0.0001, 0.01), 'lam':(0.0000001, 0.001), 'num_hidden':(300, 700), 'dropout':(0.0, 0.4), 'margin':(0.2, 0.8)}
         random_params = []
         for gpu in range(4):
-            process_args = args.copy()
+            process_args = args_copy = Namespace(**(copy.deepcopy(vars(args))))
             Process(try_random_params, args=(process_args, gpu, results_lock)).start()
     else:
         main(args)
