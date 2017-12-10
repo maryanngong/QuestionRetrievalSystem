@@ -110,7 +110,9 @@ def compute_tfidf_rankings(data, vectorizer, meter):
     return res
 
 
-def train_model(model, train, dev_data, test_data, ids_corpus, batch_size, args, model_2=None, train_batches_2=None):
+def train_model(model, train, dev_data, test_data, ids_corpus, batch_size, args, model_2=None, train_batches_2=None, results_lock=None, gpu=0):
+    if args.cuda:
+        torch.cuda.device(gpu)
     is_training=True
     best_metrics_dev = []
     best_metrics_test = []
@@ -242,7 +244,14 @@ def train_model(model, train, dev_data, test_data, ids_corpus, batch_size, args,
 
         print("Best EPOCH so far:", best_epoch, best_MRR)
         print()
-    myio.record_best_results(args, best_metrics_dev, best_metrics_test, best_epoch)
+    if results_lock:
+        results_lock.acquire()
+        try:
+            myio.record_best_results(args, best_metrics_dev, best_metrics_test, best_epoch)
+        finally:
+            results_lock.release()
+    else:
+        myio.record_best_results(args, best_metrics_dev, best_metrics_test, best_epoch)
 
 # same as compile_rankings function except it already has positive and negative labels passed as qlabels
 # also only handles one minibatch

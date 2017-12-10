@@ -12,42 +12,11 @@ import pdb
 import data.myio as myio
 from sklearn.feature_extraction.text import TfidfVectorizer
 from tabulate import tabulate
+import random
+from multiprocessing import Process, Lock
 
 
-
-parser = argparse.ArgumentParser(description='Question Retrieval Model')
-# task
-parser.add_argument('-d', '--domain_adaptation', action='store_true', default=False, help='choose adaptation transfer setting')
-# learning
-parser.add_argument('--lr', type=float, default=0.001, help='initial learning rate [default: 0.001]')
-parser.add_argument('--lr2', type=float, default=-0.001, help='initial learning rate [default: -0.001]')
-parser.add_argument('--epochs', type=int, default=256, help='number of epochs for train [default: 256]')
-parser.add_argument('--batch_size', type=int, default=32, help='batch size for training [default: 64]')
-parser.add_argument('--lam', type=float, default=0.0001, help='constant multiplier on loss 2 in domain adaptation')
-# data
-parser.add_argument('--embeddings_path', type=str, default='../../askubuntu/vector/vectors_pruned.200.txt.gz', help='path for word embeddings')
-parser.add_argument('--cased', action='store_true', default=False, help="use cased glove embeddings")
-# model
-parser.add_argument('--model_name', nargs="?", type=str, default='dan', choices=['dan', 'cnn2', 'cnn3', 'cnn4', 'lstm_bi', 'lstm_bi_fc', 'lstm3', 'tfidf'], help="Encoder model type [dan, cnn2, cnn3, cnn4, lstm_bi, lstm_bi_fc, lstm3]")
-parser.add_argument('--model_name_2', nargs="?", type=str, default='ffn', choices=['ffn'], help="Discriminator model type")
-parser.add_argument('--num_hidden', type=int, default=32, help="encoding size.")
-parser.add_argument('--dropout', type=float, default=0.0, help="dropout parameter")
-parser.add_argument('--margin', type=float, default=1.0)
-# device
-parser.add_argument('-c', '--cuda', action='store_true', default=False, help='enable the gpu')
-parser.add_argument('-t', '--train', action='store_true', default=False, help='enable train')
-# task
-parser.add_argument('--snapshot', type=str, default=None, help='filename of model snapshot to load[default: None]')
-parser.add_argument('--snapshot2', type=str, default=None, help='filename of discriminator model snapshot to load[default: None]')
-parser.add_argument('--save_path', type=str, default="", help='Path where to dump model')
-parser.add_argument('--results_path', type=str, default="all_results.txt", help="Path where to save best results")
-
-parser.add_argument('-a', '--android', action='store_true', default=False, help="run evaluation on android dataset")
-
-args = parser.parse_args()
-
-
-if __name__ == '__main__':
+def main(args, results_lock=None):
     # update args and print
 
     print("\nParameters:")
@@ -132,7 +101,7 @@ if __name__ == '__main__':
             # Create Batch2 batches
             if args.domain_adaptation:
                 train_2 = myio.create_discriminator_batches(ids_corpus, ids_android_corpus, (len(train) / args.batch_size + 1))
-                train_utils.train_model(model, train, dev, test, ids_corpus, args.batch_size, args, model_2, train_2)
+                train_utils.train_model(model, train, dev, test, ids_corpus, args.batch_size, args, model_2, train_2, results_lock, args.gpuid)
             else:
                 train_utils.train_model(model, train, dev, test, ids_corpus, args.batch_size, args)
 
@@ -145,3 +114,62 @@ if __name__ == '__main__':
             print("Evaluating performance on test data...")
             MAP, MRR, P1, P5, auc5 = train_utils.evaluate(model_data=test, model=model, args=args)
             print(tabulate([[MAP, MRR, P1, P5, auc5]], headers=['MAP', 'MRR', 'P@1', 'P@5', 'AUC0.05']))
+
+def try_random_params(args, gpu, results_lock):
+    args_dict = vars(process_args)
+    args_dict['gpuid'] = gpu
+    for i in range(1000):
+        for p in tunable_params:
+            if isinstance(param_specs[p][1], int):
+                args_dict[p] = random.randint(param_specs[p][0], param_specs[p][1])
+            else:
+                args_dict[p] = random.uniform(param_specs[p][0], param_specs[p][1])
+        main(args, results_lock)
+    print("DONE!")
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='Question Retrieval Model')
+    # task
+    parser.add_argument('-d', '--domain_adaptation', action='store_true', default=False, help='choose adaptation transfer setting')
+    # learning
+    parser.add_argument('--lr', type=float, default=0.001, help='initial learning rate [default: 0.001]')
+    parser.add_argument('--lr2', type=float, default=-0.001, help='initial learning rate [default: -0.001]')
+    parser.add_argument('--epochs', type=int, default=20, help='number of epochs for train [default: 256]')
+    parser.add_argument('--batch_size', type=int, default=32, help='batch size for training [default: 64]')
+    parser.add_argument('--lam', type=float, default=0.0001, help='constant multiplier on loss 2 in domain adaptation')
+    # data
+    parser.add_argument('--embeddings_path', type=str, default='../../askubuntu/vector/vectors_pruned.200.txt.gz', help='path for word embeddings')
+    parser.add_argument('--cased', action='store_true', default=False, help="use cased glove embeddings")
+    # model
+    parser.add_argument('--model_name', nargs="?", type=str, default='dan', choices=['dan', 'cnn2', 'cnn3', 'cnn4', 'lstm_bi', 'lstm_bi_fc', 'lstm3', 'tfidf'], help="Encoder model type [dan, cnn2, cnn3, cnn4, lstm_bi, lstm_bi_fc, lstm3]")
+    parser.add_argument('--model_name_2', nargs="?", type=str, default='ffn', choices=['ffn'], help="Discriminator model type")
+    parser.add_argument('--num_hidden', type=int, default=32, help="encoding size.")
+    parser.add_argument('--dropout', type=float, default=0.0, help="dropout parameter")
+    parser.add_argument('--margin', type=float, default=1.0)
+    # device
+    parser.add_argument('-c', '--cuda', action='store_true', default=False, help='enable the gpu')
+    parser.add_argument('-t', '--train', action='store_true', default=False, help='enable train')
+    # task
+    parser.add_argument('--snapshot', type=str, default=None, help='filename of model snapshot to load[default: None]')
+    parser.add_argument('--snapshot2', type=str, default=None, help='filename of discriminator model snapshot to load[default: None]')
+    parser.add_argument('--save_path', type=str, default="", help='Path where to dump model')
+    parser.add_argument('--results_path', type=str, default="all_results.txt", help="Path where to save best results")
+
+    parser.add_argument('-a', '--android', action='store_true', default=False, help="run evaluation on android dataset")
+    parser.add_argument('--gpuid', type=int, default=0, help="set cuda device for torch")
+    parser.add_argument('--hyperparam_search', action='store_true', default=False, help="search over possible hp combos")
+
+    args = parser.parse_args()
+
+
+    if args.hyperparam_search:
+        results_lock = Lock()
+        tunable_params = ['lr', 'lam', 'num_hidden', 'dropout', 'margin']
+        # (minval, delta)
+        param_specs = {'lr':(0.0001, 0.01), 'lam':(0.0000001, 0.001), 'num_hidden':(300, 700), 'dropout':(0.0, 0.4), 'margin':(0.2, 0.8)}
+        random_params = []
+        for gpu in range(4):
+            process_args = args.copy()
+            Process(try_random_params, args=(process_args, gpu, results_lock)).start()
+    else:
+        main(args)
