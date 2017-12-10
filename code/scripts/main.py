@@ -15,6 +15,7 @@ from tabulate import tabulate
 import random
 from multiprocessing import Process, Lock
 import copy
+import multiprocessing
 
 
 def main(args, results_lock=None):
@@ -142,7 +143,7 @@ if __name__ == '__main__':
     parser.add_argument('--embeddings_path', type=str, default='../../askubuntu/vector/vectors_pruned.200.txt.gz', help='path for word embeddings')
     parser.add_argument('--cased', action='store_true', default=False, help="use cased glove embeddings")
     # model
-    parser.add_argument('--model_name', nargs="?", type=str, default='dan', choices=['dan', 'cnn2', 'cnn3', 'cnn4', 'lstm_bi', 'lstm_bi_fc', 'lstm3', 'tfidf'], help="Encoder model type [dan, cnn2, cnn3, cnn4, lstm_bi, lstm_bi_fc, lstm3]")
+    parser.add_argument('--model_name', nargs="?", type=str, default='cnn3', choices=['dan', 'cnn2', 'cnn3', 'cnn4', 'lstm_bi', 'lstm_bi_fc', 'lstm3', 'tfidf'], help="Encoder model type [dan, cnn2, cnn3, cnn4, lstm_bi, lstm_bi_fc, lstm3]")
     parser.add_argument('--model_name_2', nargs="?", type=str, default='ffn', choices=['ffn'], help="Discriminator model type")
     parser.add_argument('--num_hidden', type=int, default=32, help="encoding size.")
     parser.add_argument('--dropout', type=float, default=0.0, help="dropout parameter")
@@ -164,13 +165,14 @@ if __name__ == '__main__':
 
 
     if args.hyperparam_search:
+        manager = multiprocessing.Manager()
         results_lock = Lock()
         tunable_params = ['lr', 'lam', 'num_hidden', 'dropout', 'margin']
         # (minval, delta)
         param_specs = {'lr':(0.0001, 0.01), 'lam':(0.0000001, 0.001), 'num_hidden':(300, 700), 'dropout':(0.0, 0.4), 'margin':(0.2, 0.8)}
         random_params = []
         for gpu in range(4):
-            process_args = args_copy = Namespace(**(copy.deepcopy(vars(args))))
-            Process(try_random_params, args=(process_args, gpu, results_lock)).start()
+            process_args = manager.Namespace(**(copy.deepcopy(vars(args))))
+            Process(target=try_random_params, args=(process_args, gpu, results_lock)).start()
     else:
         main(args)
