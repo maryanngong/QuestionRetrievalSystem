@@ -171,7 +171,7 @@ if __name__ == '__main__':
         manager = multiprocessing.Manager()
         results_lock = Lock()
         tunable_params = ['lr', 'lam', 'num_hidden', 'dropout', 'margin']
-        # (minval, delta)
+        # (minval, maxval)
         param_specs = {'lr':(0.0001, 0.01), 'lam':(0.0000001, 0.001), 'num_hidden':(300, 700), 'dropout':(0.0, 0.4), 'margin':(0.2, 0.8)}
         random_params = []
         for gpu in range(4):
