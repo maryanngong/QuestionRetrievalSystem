@@ -104,6 +104,8 @@ def main(args, results_lock=None):
             if args.domain_adaptation:
                 train_2 = myio.create_discriminator_batches(ids_corpus, ids_android_corpus, (len(train) / args.batch_size + 1))
                 train_utils.train_model(model, train, dev, test, ids_corpus, args.batch_size, args, model_2, train_2, results_lock)
+            elif args.autoencoder:
+                train_utils.train_autoencoder(model, train, dev, test, ids_corpus, ids_android_corpus, args.batch_size, args)
             else:
                 train_utils.train_model(model, train, dev, test, ids_corpus, args.batch_size, args)
 
@@ -143,7 +145,7 @@ if __name__ == '__main__':
     parser.add_argument('--embeddings_path', type=str, default='../../askubuntu/vector/vectors_pruned.200.txt.gz', help='path for word embeddings')
     parser.add_argument('--cased', action='store_true', default=False, help="use cased glove embeddings")
     # model
-    parser.add_argument('--model_name', nargs="?", type=str, default='cnn3', choices=['dan', 'cnn2', 'cnn3', 'cnn4', 'lstm_bi', 'lstm_bi_fc', 'lstm3', 'tfidf'], help="Encoder model type [dan, cnn2, cnn3, cnn4, lstm_bi, lstm_bi_fc, lstm3]")
+    parser.add_argument('--model_name', nargs="?", type=str, default='cnn3', choices=['dan', 'cnn_autoencoder', 'cnn2', 'cnn3', 'cnn4', 'lstm_bi', 'lstm_bi_fc', 'lstm3', 'tfidf'], help="Encoder model type [dan, cnn2, cnn3, cnn4, lstm_bi, lstm_bi_fc, lstm3]")
     parser.add_argument('--model_name_2', nargs="?", type=str, default='ffn', choices=['ffn'], help="Discriminator model type")
     parser.add_argument('--num_hidden', type=int, default=32, help="encoding size.")
     parser.add_argument('--dropout', type=float, default=0.0, help="dropout parameter")
@@ -162,6 +164,7 @@ if __name__ == '__main__':
     parser.add_argument('--hyperparam_search', action='store_true', default=False, help="search over possible hp combos")
 
     parser.add_argument('--show_discr_loss', action='store_true', default=False, help="print out discriminator loss and accuracy each batch")
+    parser.add_argument('--autoencoder', action='store_true', default=False, help="run autoencoder version of cnn")
 
     args = parser.parse_args()
 

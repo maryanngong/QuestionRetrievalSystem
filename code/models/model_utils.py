@@ -22,6 +22,8 @@ def get_model(embeddings, args, is_model_2=False):
         return CNN2(embeddings, args)
     elif args.model_name == 'cnn3':
         return CNN3(embeddings, args)
+    elif args.model_name =='cnn_autoencoder':
+        return CNN_Autoencoder(embeddings, args)
     elif args.model_name == 'lstm_bi':
         return LSTM_bi(embeddings, args)
     elif args.model_name == 'lstm_bi_fc':
@@ -94,6 +96,35 @@ class CNN3(nn.Module):
         out = self.conv1(x)
         return out
 
+class CNN_Autoencoder(nn.Module):
+    def __init__(self, embeddings, args):
+        super(CNN_Autoencoder, self).__init__()
+        self.args = args
+        vocab_size, embed_dim = embeddings.shape
+
+        self.embedding_layer = nn.Embedding( vocab_size, embed_dim)
+        self.embedding_layer.weight.data = torch.from_numpy( embeddings )
+        self.embedding_layer.weight.requires_grad = False
+
+        self.conv1 = nn.Conv1d(embed_dim, args.num_hidden, kernel_size=3)
+        self.deconv1 = nn.ConvTranspose1d(args.num_hidden, embed_dim, kernel_size=3)
+
+    def encode(self, x_indx):
+        x = self.embedding_layer(x_indx)
+        # reorder dimensions for convolutional layer
+        x = x.permute(0,2,1)
+        x_d = F.dropout(x, p=self.args.dropout, training=self.training)
+        out = self.conv1(x_d)
+        return out, x
+
+    def decode(self, encoded):
+        out = self.deconv1(encoded)
+        return out
+
+    def forward(self, x_indx):
+        encoded, og = self.encode(x_indx)
+        out = self.decode(encoded)
+        return out, og, encoded
 
 class CNN4(nn.Module):
 

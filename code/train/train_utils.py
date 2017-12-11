@@ -71,8 +71,12 @@ def compute_model_rankings(data, model, args, meter):
         titles, bodies = autograd.Variable(idts), autograd.Variable(idbs)
         if args.cuda:
             titles, bodies = titles.cuda(), bodies.cuda()
-        encode_titles = model(titles)
-        encode_bodies = model(bodies)
+        if args.autoencoder:
+            _, _, encode_titles = model(titles)
+            _, _, encode_bodies = model(bodies)
+        else:
+            encode_titles = model(titles)
+            encode_bodies = model(bodies)
 
         if 'lstm' in args.model_name:
             titles_encodings = average_without_padding_lstm(encode_titles, idts, cuda=args.cuda)
@@ -108,6 +112,118 @@ def compute_tfidf_rankings(data, vectorizer, meter):
         ranked_labels = labels[ranks]
         res.append(ranked_labels)
     return res
+
+def train_autoencoder(model, train, dev_data, test_data, ids_corpus_ubuntu, ids_corpus_android, batch_size, args):
+    is_training = True
+    if args.cuda:
+        model = model.cuda()
+    parameters = ifilter(lambda p: p.requires_grad, model.parameters())
+    optimizer = torch.optim.Adam(parameters , lr=args.lr)
+    model.train()   
+    best_epoch = 0
+    best_MRR = 0 
+
+    for epoch in range(1, args.epochs+1):
+        print("-------------\nEpoch {}:\n".format(epoch))
+        # randomize new dataset each time
+        train_batches = myio.create_batches(ids_corpus_ubuntu, train, batch_size, 0, pad_left=False)
+        train_batches_autoencoder = myio.create_discriminator_batches(ids_corpus_ubuntu, ids_corpus_android, len(train) / batch_size + 1, 0, pad_left=False)
+
+
+        N =len(train_batches)
+        losses = []
+        all_results = []
+        for i in xrange(N):
+            # get current batch
+            t, b, train_group_ids = train_batches[i]
+            t2, b2, _ = train_batches_autoencoder[i]
+            titles, bodies = autograd.Variable(t), autograd.Variable(b)
+            titles2, bodies2 = autograd.Variable(t2), autograd.Variable(b2)
+            if args.cuda:
+                titles, bodies, titles2, bodies2 = titles.cuda(), bodies.cuda(), titles2.cuda(), bodies2.cuda()
+            if is_training:
+                optimizer.zero_grad()
+            # Encode all of the title and body text using model
+            # squeeze dimension differs for lstm and cnn models
+
+            _, _, encode_titles = model(titles)
+            _, _, encode_bodies = model(bodies)
+            reconstr_titles2, target_titles2, _ = model(titles2)
+            reconstr_bodies2, target_bodies2, _ = model(bodies2)
+
+            if 'cnn' in args.model_name:
+                titles_encodings = average_without_padding_cnn(encode_titles, t, cuda=args.cuda)
+                bodies_encodings = average_without_padding_cnn(encode_bodies, b, cuda=args.cuda)
+            else:
+                titles_encodings = average_without_padding_lstm(encode_titles, t, cuda=args.cuda)
+                bodies_encodings = average_without_padding_lstm(encode_bodies, b, cuda=args.cuda)
+
+            text_encodings = (titles_encodings + bodies_encodings) * 0.5
+
+            # Calculate Loss = Multi-Margin-Loss(train_group_ids, text_encodings)
+            scores, target_indices = score_utils.batch_cosine_similarity(text_encodings, train_group_ids, args.cuda)
+            loss1 = F.multi_margin_loss(scores, target_indices, margin=args.margin)
+            # Calculate mean square error loss
+            # currently weight the title and body reconstruction loss the same, but perhaps add a hyperparameter?
+            loss2 = F.mse_loss(reconstr_titles2, target_titles2) + F.mse_loss(reconstr_bodies2, target_bodies2)
+            total_loss = loss1 + (args.lam * loss2)
+            total_loss.backward()
+            optimizer.step()
+            losses.append(total_loss.cpu().data[0])
+
+
+            print("BATCH LOSS "+str(i+1)+" out of "+str(N)+": ")
+            print(losses[-1])
+            rankings = compile_rankings(train_group_ids, scores.cpu().data.numpy())
+            results = strip_ids_and_scores(rankings)
+            all_results += results
+
+        # if epoch % 2 == 0 and len(args.save_path) > 0:
+        #     torch.save(model, args.save_path+"_args_"+serialize_model_name(args)+"_epoch"+str(epoch)+'.pt')
+        #     if args.domain_adaptation:
+        #         torch.save(model_2, args.save_path+"_args_"+serialize_model_name(args)+"_epoch"+str(epoch)+"_discriminator.pt")
+        # Evaluation Metrics
+        precision_at_1 = eval_utils.precision_at_k(all_results, 1)*100
+        precision_at_5 = eval_utils.precision_at_k(all_results, 5)*100
+        MAP = eval_utils.mean_average_precision(all_results)*100
+        MRR = eval_utils.mean_reciprocal_rank(all_results)*100
+        print(tabulate([[MAP, MRR, precision_at_1, precision_at_5]], headers=['MAP', 'MRR', 'P@1', 'P@5']))
+        avg_loss = np.mean(losses)
+        print('Train max-margin loss: {:.6f}'.format( avg_loss))
+
+        print("Dev data Performance")
+        MAP, MRR, P1, P5, auc5 = evaluate(model_data=dev_data, model=model, args=args)
+        print(tabulate([[MAP, MRR, P1, P5, auc5]], headers=['MAP', 'MRR', 'P@1', 'P@5', 'AUC0.05']))
+        print()
+        print("Test data Performance")
+        mapt, mrrt, p1t, p5t, auc5t = evaluate(model_data=test_data, model=model, args=args)
+        print(tabulate([[mapt, mrrt, p1t, p5t, auc5t]], headers=['MAP', 'MRR', 'P@1', 'P@5', 'AUC0.05']))
+        print()
+
+        # for android dataset, validate using AUC0.05 metric
+        if args.android:
+            MRR = auc5
+        if MRR > best_MRR:
+            best_MRR = MRR
+            best_metrics_dev = [MAP, MRR, P1, P5, auc5]
+            best_metrics_test = [mapt, mrrt, p1t, p5t, auc5t]
+            best_epoch = epoch
+            # Save model
+            torch.save(model, args.save_path+"_args_"+serialize_model_name(args)+"_epoch_best.pt")
+            if args.domain_adaptation:
+                torch.save(model_2, args.save_path+"_args_"+serialize_model_name(args)+"_epoch_best_discriminator.pt")
+
+
+        print("Best EPOCH so far:", best_epoch, best_MRR)
+        print()
+    if results_lock:
+        results_lock.acquire()
+        try:
+            myio.record_best_results(args.results_path, args.save_path+"_args_"+serialize_model_name(args), best_metrics_dev, best_metrics_test, best_epoch)
+        finally:
+            results_lock.release()
+    else:
+        myio.record_best_results(args.results_path, args.save_path+"_args_"+serialize_model_name(args), best_metrics_dev, best_metrics_test, best_epoch)
 
 
 def train_model(model, train, dev_data, test_data, ids_corpus, batch_size, args, model_2=None, train_batches_2=None, results_lock=None):
@@ -218,10 +334,10 @@ def train_model(model, train, dev_data, test_data, ids_corpus, batch_size, args,
             results = strip_ids_and_scores(rankings)
             all_results += results
 
-        if epoch % 2 == 0 and len(args.save_path) > 0:
-            torch.save(model, args.save_path+"_args_"+serialize_model_name(args)+"_epoch"+str(epoch)+'.pt')
-            if args.domain_adaptation:
-                torch.save(model_2, args.save_path+"_args_"+serialize_model_name(args)+"_epoch"+str(epoch)+"_discriminator.pt")
+        # if epoch % 2 == 0 and len(args.save_path) > 0:
+        #     torch.save(model, args.save_path+"_args_"+serialize_model_name(args)+"_epoch"+str(epoch)+'.pt')
+        #     if args.domain_adaptation:
+        #         torch.save(model_2, args.save_path+"_args_"+serialize_model_name(args)+"_epoch"+str(epoch)+"_discriminator.pt")
         # Evaluation Metrics
         precision_at_1 = eval_utils.precision_at_k(all_results, 1)*100
         precision_at_5 = eval_utils.precision_at_k(all_results, 5)*100
