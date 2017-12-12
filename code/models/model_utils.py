@@ -92,10 +92,10 @@ class CNN3(nn.Module):
         x = self.embedding_layer(x_indx)
         # reorder dimensions for convolutional layer
         if self.add_noise:
-            print(x[0])
-            a = torch.FloatTensor(len(x[0]))
-            b = torch.FloatTensor(len(x[0]))
-            x[0] += (self.noise_factor * (a / a.norm()) - (b / b.norm()))
+            print(x)
+            a = autograd.Variable(torch.FloatTensor(len(x[0]))).cuda()
+            b = autograd.Variable(torch.FloatTensor(len(x[0]))).cuda()
+            x[0,0,:] += (self.noise_factor * (a / a.norm()) - (b / b.norm()))
         x = x.permute(0,2,1)
         x = F.dropout(x, p=self.args.dropout, training=self.training)
         out = self.conv1(x)
