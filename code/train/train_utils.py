@@ -175,7 +175,7 @@ def train_model(model, train, dev_data, test_data, ids_corpus, batch_size, args,
             # Batch 2
             if args.domain_adaptation:
                 t2, b2, d = train_batches_2[i]
-                t3, b3 = train_batches_2[i]
+                t3, b3 = train_batches_3[i]
                 titles_2, bodies_2, domains = autograd.Variable(t2), autograd.Variable(b2), autograd.Variable(torch.FloatTensor(d), requires_grad=False)
                 titles_3, bodies_3 = autograd.Variable(t3), autograd.Variable(b3)
                 if args.cuda:

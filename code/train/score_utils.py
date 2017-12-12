@@ -45,6 +45,7 @@ def batch_cosine_similarity(encoded, training_ids, cuda=False):
 
 def batch_cosine_similarity_no_ids(encoded, cuda=False):
     n = 1
+    all_scores = []
     enc_query = encoded[0]
     enc_candidates = encoded[1:]
     similarity_scores = F.cosine_similarity(enc_query.view(1,-1), enc_candidates)
