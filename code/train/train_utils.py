@@ -207,8 +207,8 @@ def train_model(model, train, dev_data, test_data, ids_corpus, batch_size, args,
                 # Calculate loss 2
                 loss_2 = F.binary_cross_entropy_with_logits(labeled_encodings_2, domains)
                 # Calculate loss 3
-                scores, target_indices = score_utils.batch_cosine_similarity_no_ids(encoded_text_a, args.cuda)
-                loss_3 = F.multi_margin_loss(scores, target_indices, margin=args.margin_b)
+                scores_3, target_indices_3 = score_utils.batch_cosine_similarity_no_ids(encoded_text_a, args.cuda)
+                loss_3 = F.multi_margin_loss(scores_3, target_indices_3, margin=args.margin_b)
 
                 if args.show_discr_loss:
                     print("discriminator loss: ", loss_2)
