@@ -187,8 +187,10 @@ def train_model(model, train, dev_data, test_data, ids_corpus, batch_size, args,
                     model_2.train()
                 encode_titles_2 = model(titles_2)
                 encode_bodies_2 = model(bodies_2)
+                model.add_noise = True
                 encode_titles_3 = model(titles_3)
                 encode_bodies_3 = model(bodies_3)
+                model.add_noise = False
                 if 'cnn' in args.model_name:
                     titles_encodings_2 = average_without_padding_cnn(encode_titles_2, t2, cuda=args.cuda)
                     bodies_encodings_2 = average_without_padding_cnn(encode_bodies_2, b2, cuda=args.cuda)
