@@ -283,6 +283,28 @@ def create_batches(ids_corpus, data, batch_size, padding_id, perm=None, pad_left
             cnt = 0
     return batches
 
+def create_random_negative_batches(ids_android_corpus, num_batches, padding_id=0, pad_left=False, num_samples_per=20):
+    batches = []
+    for i in xrange(num_batches):
+        titles = []
+        bodies = []
+        for k in xrange(num_samples_per):
+            random_index = random.randrange(len(ids_android_corpus))
+            key = ids_android_corpus.keys()[random_index]
+            sample = ids_android_corpus[key]
+            titles.append(sample[0])
+            bodies.append(sample[1])
+        perm = range(len(titles))
+        random.shuffle(perm)
+        titles = [titles[i] for i in perm]
+        bodies = [bodies[i] for i in perm]
+        # TODO try adding noise! but probably in train, not here
+        titles = [titles[0]] + titles
+        bodies = [bodies[0]] + bodies
+        titles, bodies = create_one_batch(titles, bodies, padding_id, pad_left)
+        batches.append((titles, bodies))
+    return batches
+
 def create_discriminator_batches(ids_ubuntu_corpus, ids_android_corpus, num_batches, padding_id=0, pad_left=False, num_samples_per=20):
     batches = []
     for i in xrange(num_batches):

@@ -110,7 +110,7 @@ def compute_tfidf_rankings(data, vectorizer, meter):
     return res
 
 
-def train_model(model, train, dev_data, test_data, ids_corpus, batch_size, args, model_2=None, train_batches_2=None, results_lock=None):
+def train_model(model, train, dev_data, test_data, ids_corpus, batch_size, args, model_2=None, train_batches_2=None, results_lock=None, train_batches_3=None):
     if args.cuda:
         print ('Available devices ', torch.cuda.device_count())
         print ('Current cuda device ', torch.cuda.current_device())
@@ -175,35 +175,48 @@ def train_model(model, train, dev_data, test_data, ids_corpus, batch_size, args,
             # Batch 2
             if args.domain_adaptation:
                 t2, b2, d = train_batches_2[i]
+                t3, b3 = train_batches_2[i]
                 titles_2, bodies_2, domains = autograd.Variable(t2), autograd.Variable(b2), autograd.Variable(torch.FloatTensor(d), requires_grad=False)
+                titles_3, bodies_3 = autograd.Variable(t3), autograd.Variable(b3)
                 if args.cuda:
                     titles_2, bodies_2, domains = titles_2.cuda(), bodies_2.cuda(), domains.cuda()
+                    titles_3, bodies_3 = titles_3.cuda(), bodies_3.cuda()
                 if is_training:
                     model_2.train()
                     optimizer_2.zero_grad()
                     model_2.train()
                 encode_titles_2 = model(titles_2)
                 encode_bodies_2 = model(bodies_2)
+                encode_titles_3 = model(titles_3)
+                encode_bodies_3 = model(bodies_3)
                 if 'cnn' in args.model_name:
                     titles_encodings_2 = average_without_padding_cnn(encode_titles_2, t2, cuda=args.cuda)
                     bodies_encodings_2 = average_without_padding_cnn(encode_bodies_2, b2, cuda=args.cuda)
+                    titles_encodings_3 = average_without_padding_cnn(encode_titles_3, t3, cuda=args.cuda)
+                    bodies_encodings_3 = average_without_padding_cnn(encode_bodies_3, b3, cuda=args.cuda)
                 else:
                     titles_encodings_2 = average_without_padding_lstm(encode_titles_2, t2, cuda=args.cuda)
                     bodies_encodings_2 = average_without_padding_lstm(encode_bodies_2, b2, cuda=args.cuda)
+                    titles_encodings_3 = average_without_padding_lstm(encode_titles_3, t3, cuda=args.cuda)
+                    bodies_encodings_3 = average_without_padding_lstm(encode_bodies_3, b3, cuda=args.cuda)
                 encoded_text = (titles_encodings_2 + bodies_encodings_2) * 0.5
+                encoded_text_a = (titles_encodings_3 + bodies_encodings_3) * 0.5
                 # Run through discriminators
                 labeled_encodings_2 = model_2(encoded_text)
                 labeled_encodings_2 = torch.squeeze(labeled_encodings_2)
                 # Calculate loss 2
                 loss_2 = F.binary_cross_entropy_with_logits(labeled_encodings_2, domains)
-                
+                # Calculate loss 3
+                scores, target_indices = score_utils.batch_cosine_similarity_no_ids(encoded_text_a, args.cuda)
+                loss_3 = F.multi_margin_loss(scores, target_indices, margin=args.margin_b)
+
                 if args.show_discr_loss:
                     print("discriminator loss: ", loss_2)
                     preds = labeled_encodings_2 >= 0.5
                     acc = accuracy_score(d, preds.cpu().data.numpy())
                     print("Discriminator accuracy:", acc)
                 # Calculate total cost
-                total_cost = loss - (args.lam * loss_2)
+                total_cost = loss + (args.gam * loss_3) - (args.lam * loss_2)
                 total_cost.backward()
                 optimizer.step()
                 optimizer_2.step()

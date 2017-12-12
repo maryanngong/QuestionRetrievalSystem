@@ -40,8 +40,19 @@ def batch_cosine_similarity(encoded, training_ids, cuda=False):
     target_indices = autograd.Variable(torch.zeros(n).type(torch.LongTensor), requires_grad=False)
     if cuda:
         target_indices = target_indices.cuda()
-    return torch.cat(all_scores, 0).view(n, -1), target_indices 
+    return torch.cat(all_scores, 0).view(n, -1), target_indices
 
+
+def batch_cosine_similarity_no_ids(encoded, cuda=False):
+    n = 1
+    enc_query = encoded[0]
+    enc_candidates = encoded[1:]
+    similarity_scores = F.cosine_similarity(enc_query.view(1,-1), enc_candidates)
+    all_scores.append(similarity_scores)
+    target_indices = autograd.Variable(torch.zeros(n).type(torch.LongTensor), requires_grad=False)
+    if cuda:
+        target_indices = target_indices.cuda()
+    return torch.cat(all_scores, 0).view(n, -1), target_indices
 
 # Calculates cosine similarity for this batch of data, used during evaluation
 # Parameters:
