@@ -110,6 +110,113 @@ def compute_tfidf_rankings(data, vectorizer, meter):
     return res
 
 
+def train_gan(transformer, discriminator, encoder, transformer_batches, discriminator_batches, encoder_batches, dev_data, test_data, args, results_lock=None):
+    if args.cuda:
+        transformer.cuda()
+        discriminator.cuda()
+        encoder.cuda()
+    ones = torch.ones(discriminator_batches[0].size()[0])
+    zeros = torch.zeros(discriminator_batches[0].size()[0])
+    optimizer_d = torch.optim.Adam(discriminator.parameters(), lr=args.lr_d)
+    parameters_t = ifilter(lambda p: p.requires_grad, transformer.parameters())
+    optimizer_t = torch.optim.Adam(parameters_t, lr=args.lr_t)
+    parameters_e = ifilter(lambda p: p.requires_grad, encoder.parameters())
+    optimizer_e = torch.optim.Adam(parameters_e, lr=args.lr)
+    best_epoch = 0
+    best_AUC05_dev = 0.0
+    best_AUC05_test = 0.0
+    for epoch in range(1, args.epochs + 1):
+        print("-------------------\nEpoch {}:\n".format(epoch))
+        # Adverserial Training
+        discriminator.train()
+        transformer.train()
+        encoder.train()
+        losses_d = []
+        losses_t = []
+        losses_e = []
+        for num_batch in xrange(len(transformer_batches)):
+            print("ADVERSERIAL BATCH #{} of {}".format(num_batch, len(transformer_batches)))
+            # k Discriminator batches
+            for num_batch_d in xrange(args.k):
+                data = discriminator_batches[(num_batch * args.k) + num_batch_d]
+                titles_s, bodies_s, titles_t, bodies_t = [autograd.Variable(x) for x in data]
+                if args.cuda:
+                    titles_s, bodies_s, titles_t, bodies_t = [x.cuda() for x in (titles_s, bodies_s, titles_t, bodies_t)]
+                # TODO test if changing variable names matters
+                # Train on real target data
+                is_target_titles = discriminator(titles_t)
+                is_target_bodies = discriminator(bodies_t)
+                loss_real = F.binary_cross_entropy_with_logits(is_target_titles, ones) + F.binary_cross_entropy_with_logits(is_target_bodies, ones)
+                # Train on fake (transformed source) data
+                is_target_titles = discriminator(transformer(titles_s))
+                is_target_bodies = discriminator(transformer(bodies_s))
+                loss_fake = F.binary_cross_entropy_with_logits(is_target_titles, zeros) + F.binary_cross_entropy_with_logits(is_target_bodies, zeros)
+                # Compute gradients and backprop
+                total_discriminator_loss = loss_real + loss_fake
+                losses_d.append(total_discriminator_loss.cpu().data[0])
+                optimizer_d.zero_grad()
+                total_discriminator_loss.backward()
+                optimizer_d.step()
+            # Transformer batch
+            data = transformer_batches[num_batch]
+            titles_s, bodies_s, _, _ = [autograd.Variable(x) for x in data]
+            if args.cuda:
+                titles_s, bodies_s = [x.cuda() for x in (titles_s, bodies_s)]
+            is_target_titles = discriminator(transformer(titles_s))
+            is_target_bodies = discriminator(transformer(bodies_s))
+            total_transformer_loss = F.binary_cross_entropy_with_logits(is_target_titles, ones) + F.binary_cross_entropy_with_logits(is_target_bodies, ones)
+            losses_t.append(total_transformer_loss.cpu().data[0])
+            optimizer_t.zero_grad()
+            total_transformer_loss.backward()
+            optimizer_t.step()
+            if args.verbose:
+                print("LAST DISCRIMINATOR LOSS: {}".format(losses_d[-1]))
+                print("LAST TRANSFORMER LOSS: {}".format(losses_t[-1]))
+        # Encoder Training
+        for num_batch in xrange(len(encoder_batches)):
+            print("ENCODER BATCH #{} of {}".format(num_batch, len(encoder_batches)))
+            titles_s, bodies_s, train_group_ids = encoder_batches[num_batch]
+            titles_s, bodies_s = [autograd.Variable(x) for x in (titles_s, bodies_s)]
+            if args.cuda:
+                titles_s, bodies_s = [x.cuda() for x in (titles_s, bodies_s)]
+            encoded_titles = encoder(transformer(titles_s))
+            encoded_bodies = encoder(transformer(bodies_s))
+            avg_encoded_titles = average_without_padding_cnn(encoded_titles, titles_s.cpu().data.numpy(), cuda=args.cuda)
+            avg_encoded_bodies = average_without_padding_cnn(encoded_bodies, bodies_s.cpu().data.numpy(), cuda=args.cuda)
+            avg_encoded_text = (avg_encoded_titles + avg_encoded_bodies) * 0.5
+            scores, target_indices = score_utils.batch_cosine_similarity(avg_encoded_text, train_group_ids, args.cuda)
+            total_encoder_loss = F.multi_margin_loss(scores, target_indices, margin=args.margin)
+            losses_e.append(total_encoder_loss.cpu().data[0])
+            optimizer_e.zero_grad()
+            total_encoder_loss.backward()
+            optimizer_e.step()
+            if args.verbose:
+                print("LAST ENCODER LOSS: {}".format(losses_e[-1]))
+        # Evaluation
+        encoder.eval()
+        print("Dev data performance")
+        _, _, _, _, AUC05_dev = evaluate(model_data=dev_data, model=encoder, args=args)
+        print(tabulate([[AUC05_dev]], headers=['AUC_0.5']))
+        print("\nTest data performance")
+        _, _, _, _, AUC05_test = evaluate(model_data=test_data, model=encoder, args=args)
+        print(tabulate([[AUC05_test]], headers=['AUC_0.5']))
+        if AUC05_dev > best_AUC05_dev:
+            best_AUC05_dev = AUC05_dev
+            best_AUC05_test = AUC05_test
+            best_epoch = epoch
+            # TODO save models
+        print("Best epoch so far:", best_epoch, best_AUC05_dev)
+        print()
+    if results_lock:
+        results_lock.acquire()
+        try:
+            myio.record_best_results(args.results_path, args.save_path+"_args_"+serialize_model_name(args), [best_AUC05_dev], [best_AUC05_test], best_epoch)
+        finally:
+            results_lock.release()
+    else:
+        myio.record_best_results(args.results_path, args.save_path+"_args_"+serialize_model_name(args), [best_AUC05_dev], [best_AUC05_test], best_epoch)
+
+
 def train_model(model, train, dev_data, test_data, ids_corpus, batch_size, args, model_2=None, train_batches_2=None, results_lock=None):
     if args.cuda:
         print ('Available devices ', torch.cuda.device_count())
@@ -196,7 +303,7 @@ def train_model(model, train, dev_data, test_data, ids_corpus, batch_size, args,
                 labeled_encodings_2 = torch.squeeze(labeled_encodings_2)
                 # Calculate loss 2
                 loss_2 = F.binary_cross_entropy_with_logits(labeled_encodings_2, domains)
-                
+
                 if args.show_discr_loss:
                     print("discriminator loss: ", loss_2)
                     preds = labeled_encodings_2 >= 0.5

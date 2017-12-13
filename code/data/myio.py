@@ -283,7 +283,7 @@ def create_batches(ids_corpus, data, batch_size, padding_id, perm=None, pad_left
             cnt = 0
     return batches
 
-def create_discriminator_batches(ids_ubuntu_corpus, ids_android_corpus, num_batches, padding_id=0, pad_left=False, num_samples_per=20):
+def create_discriminator_batches(ids_ubuntu_corpus, ids_android_corpus, num_batches, padding_id=0, pad_left=False, num_samples_per=20, should_perm=True):
     batches = []
     for i in xrange(num_batches):
         titles = []
@@ -303,13 +303,17 @@ def create_discriminator_batches(ids_ubuntu_corpus, ids_android_corpus, num_batc
             titles.append(sample[0])
             bodies.append(sample[1])
             labels.append(1)
-        perm = range(len(titles))
-        random.shuffle(perm)
-        titles = [titles[i] for i in perm]
-        bodies = [bodies[i] for i in perm]
-        labels = [labels[i] for i in perm]
+        if should_perm:
+            perm = range(len(titles))
+            random.shuffle(perm)
+            titles = [titles[i] for i in perm]
+            bodies = [bodies[i] for i in perm]
+            labels = [labels[i] for i in perm]
         titles, bodies = create_one_batch(titles, bodies, padding_id, pad_left)
-        batches.append((titles, bodies, labels))
+        if should_perm:
+            batches.append((titles, bodies, labels))
+        else:
+            batches.append((titles[:num_samples_per], bodies[:num_samples_per], titles[num_samples_per:], bodies[num_samples_per:]))
     return batches
 
 def create_eval_batches(ids_corpus, data, padding_id, pad_left):

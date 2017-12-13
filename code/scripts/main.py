@@ -68,20 +68,33 @@ def main(args, results_lock=None):
 
         # model
         if args.snapshot is None:
-            model = model_utils.get_model(embeddings, args)
-            if args.domain_adaptation:
-                model_2 = model_utils.get_model(None, args, True)
+            model = model_utils.get_model(embeddings, args, args.model_name)
+            if args.gan_training:
+                transformer = model_utils.get_model(embeddings, args, 'transformer')
+                discriminator = model_utils.get_model(embeddings, args, 'discriminator')
+                encoder = model
+            elif args.domain_adaptation:
+                model_2 = model_utils.get_model(None, args, args.model_name_2)
         else :
             print('\nLoading model from [%s]...' % args.snapshot)
             try:
                 model = torch.load(args.snapshot)
                 if args.domain_adaptation:
                     model_2 = torch.load(args.snapshot_2)
+                # TODO add snapshot support for GAN training
             except :
                 print("Sorry, This snapshot doesn't exist."); exit()
+        print("Encoder Model:")
         print(model)
-        if args.domain_adaptation:
+        if args.gan_training:
+            print("Transformer Model:")
+            print(transformer)
+            print("Discriminator Model:")
+            print(discriminator)
+        elif args.domain_adaptation:
+            print("Discriminator Model:")
             print(model_2)
+
 
         if args.android:
             raw_android_corpus = myio.read_corpus('../../Android/corpus.tsv.gz')
@@ -101,7 +114,12 @@ def main(args, results_lock=None):
         if args.train :
             train = myio.read_annotations('../../askubuntu/train_random.txt')
             # Create Batch2 batches
-            if args.domain_adaptation:
+            if args.gan_training:
+                encoder_batches = myio.create_batches(ids_corpus, ,)
+                discriminator_batches = myio.create_discriminator_batches(ids_corpus, ids_android_corpus, (5 * len(train) / args.batch_size + 1), should_perm=False)
+                transformer_batches = myio.create_discriminator_batches(ids_corpus, ids_android_corpus, (len(train) / args.batch_size + 1), should_perm=False)
+                train_utils.train_gan(encoder=encoder, transformer=transformer, discriminator=discriminator, encoder_batches=encoder_batches, discriminator_batches=discriminator_batches, transformer_batches=transformer_batches, dev_data=dev, test_data=test, args=args, results_lock=results_lock)
+            elif args.domain_adaptation:
                 train_2 = myio.create_discriminator_batches(ids_corpus, ids_android_corpus, (len(train) / args.batch_size + 1))
                 train_utils.train_model(model, train, dev, test, ids_corpus, args.batch_size, args, model_2, train_2, results_lock)
             else:
@@ -133,9 +151,12 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Question Retrieval Model')
     # task
     parser.add_argument('-d', '--domain_adaptation', action='store_true', default=False, help='choose adaptation transfer setting')
+    parser.add_argument('-g', '--gan_training', action='store_true', default=False, help='choose gan training style')
     # learning
     parser.add_argument('--lr', type=float, default=0.001, help='initial learning rate [default: 0.001]')
     parser.add_argument('--lr2', type=float, default=-0.001, help='initial learning rate [default: -0.001]')
+    parser.add_argument('--lr_d', type=float, default=0.001, help='initial learning rate [default: 0.001]')
+    parser.add_argument('--lr_t', type=float, default=0.001, help='initial learning rate [default: 0.001]')
     parser.add_argument('--epochs', type=int, default=20, help='number of epochs for train [default: 256]')
     parser.add_argument('--batch_size', type=int, default=32, help='batch size for training [default: 64]')
     parser.add_argument('--lam', type=float, default=0.0001, help='constant multiplier on loss 2 in domain adaptation')
@@ -145,8 +166,12 @@ if __name__ == '__main__':
     # model
     parser.add_argument('--model_name', nargs="?", type=str, default='cnn3', choices=['dan', 'cnn2', 'cnn3', 'cnn4', 'lstm_bi', 'lstm_bi_fc', 'lstm3', 'tfidf'], help="Encoder model type [dan, cnn2, cnn3, cnn4, lstm_bi, lstm_bi_fc, lstm3]")
     parser.add_argument('--model_name_2', nargs="?", type=str, default='ffn', choices=['ffn'], help="Discriminator model type")
-    parser.add_argument('--num_hidden', type=int, default=32, help="encoding size.")
+    parser.add_argument('--num_hidden', type=int, default=512, help="encoding size.")
+    parser.add_argument('--num_hidden_transformer', type=int, default=100, help="encoding size.")
+    parser.add_argument('--num_hidden_discriminator', type=int, default=100, help="encoding size.")
     parser.add_argument('--dropout', type=float, default=0.0, help="dropout parameter")
+    parser.add_argument('--dropout_d', type=float, default=0.0, help="dropout parameter for discriminator")
+    parser.add_argument('--dropout_t', type=float, default=0.0, help="dropout parameter for transformer")
     parser.add_argument('--margin', type=float, default=1.0)
     # device
     parser.add_argument('-c', '--cuda', action='store_true', default=False, help='enable the gpu')
@@ -162,6 +187,7 @@ if __name__ == '__main__':
     parser.add_argument('--hyperparam_search', action='store_true', default=False, help="search over possible hp combos")
 
     parser.add_argument('--show_discr_loss', action='store_true', default=False, help="print out discriminator loss and accuracy each batch")
+    parser.add_argument('-v', '--verbose', action='store_true', default=False, help="Verbose output")
 
     args = parser.parse_args()
 
