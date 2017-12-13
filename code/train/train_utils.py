@@ -166,7 +166,10 @@ def train_autoencoder(model, train, dev_data, test_data, ids_corpus_ubuntu, ids_
             # Calculate mean square error loss
             # currently weight the title and body reconstruction loss the same, but perhaps add a hyperparameter?
             loss2 = F.mse_loss(reconstr_titles2, target_titles2) + F.mse_loss(reconstr_bodies2, target_bodies2)
-            total_loss = loss1 + (args.lam * loss2)
+            if args.debug:
+                total_loss = loss1
+            else:
+                total_loss = loss1 + (args.lam * loss2)
             total_loss.backward()
             optimizer.step()
             losses.append(total_loss.cpu().data[0])
@@ -226,7 +229,7 @@ def train_autoencoder(model, train, dev_data, test_data, ids_corpus_ubuntu, ids_
         myio.record_best_results(args.results_path, args.save_path+"_args_"+serialize_model_name(args), best_metrics_dev, best_metrics_test, best_epoch)
 
 
-def train_model(model, train, dev_data, test_data, ids_corpus, batch_size, args, model_2=None, train_batches_2=None, results_lock=None):
+def train_model(model, train, dev_data, test_data, ids_corpus, batch_size, args, model_2=None, train_batches_2=None, ids_corpus_android=None, results_lock=None):
     if args.cuda:
         print ('Available devices ', torch.cuda.device_count())
         print ('Current cuda device ', torch.cuda.current_device())
@@ -255,6 +258,8 @@ def train_model(model, train, dev_data, test_data, ids_corpus, batch_size, args,
         print("-------------\nEpoch {}:\n".format(epoch))
         # randomize new dataset each time
         train_batches = myio.create_batches(ids_corpus, train, batch_size, 0, pad_left=False)
+        if args.autoencoder:
+            train_batches_auto = myio.create_discriminator_batches(ids_corpus, ids_corpus_android, len(train) / batch_size + 1, 0, pad_left=False)
 
         N =len(train_batches)
         losses = []
@@ -271,9 +276,18 @@ def train_model(model, train, dev_data, test_data, ids_corpus, batch_size, args,
                 model.train()
             # Encode all of the title and body text using model
             # squeeze dimension differs for lstm and cnn models
-
-            encode_titles = model(titles)
-            encode_bodies = model(bodies)
+            if args.autoencoder:
+                t2, b2, domains = train_batches_auto[i]
+                titles2, bodies2 = autograd.Variable(t2), autograd.Variable(b2)
+                if args.cuda:
+                    titles2, bodies2 = titles2.cuda(), bodies2.cuda()
+                _, _, encode_titles = model(titles)
+                _, _, encode_bodies = model(bodies)
+                reconstr_titles2, target_titles2, _ = model(titles2)
+                reconstr_bodies2, target_bodies2, _ = model(bodies2)
+            else:
+                encode_titles = model(titles)
+                encode_bodies = model(bodies)
 
             if 'cnn' in args.model_name:
                 titles_encodings = average_without_padding_cnn(encode_titles, t, cuda=args.cuda)
@@ -288,18 +302,31 @@ def train_model(model, train, dev_data, test_data, ids_corpus, batch_size, args,
             scores, target_indices = score_utils.batch_cosine_similarity(text_encodings, train_group_ids, args.cuda)
             loss = F.multi_margin_loss(scores, target_indices, margin=args.margin)
 
+            if args.autoencoder:
+                loss_3 = F.mse_loss(reconstr_titles2, target_titles2) + F.mse_loss(reconstr_bodies2, target_bodies2)
+
             # Batch 2
             if args.domain_adaptation:
-                t2, b2, d = train_batches_2[i]
-                titles_2, bodies_2, domains = autograd.Variable(t2), autograd.Variable(b2), autograd.Variable(torch.FloatTensor(d), requires_grad=False)
+                if args.autoencoder:
+                    titles_2 = titles2
+                    bodies_2 = bodies2
+                    domains = autograd.Variable(torch.FloatTensor(domains), requires_grad=False)
+                else:
+                    t2, b2, d = train_batches_2[i]
+                    titles_2, bodies_2, domains = autograd.Variable(t2), autograd.Variable(b2), autograd.Variable(torch.FloatTensor(d), requires_grad=False)
                 if args.cuda:
                     titles_2, bodies_2, domains = titles_2.cuda(), bodies_2.cuda(), domains.cuda()
+
                 if is_training:
                     model_2.train()
                     optimizer_2.zero_grad()
-                    model_2.train()
-                encode_titles_2 = model(titles_2)
-                encode_bodies_2 = model(bodies_2)
+                if args.autoencoder:
+                    _, _, encode_titles_2 = model(titles_2)
+                    _, _, encode_bodies_2 = model(bodies_2)
+                else:
+                    encode_titles_2 = model(titles_2)
+                    encode_bodies_2 = model(bodies_2)
+
                 if 'cnn' in args.model_name:
                     titles_encodings_2 = average_without_padding_cnn(encode_titles_2, t2, cuda=args.cuda)
                     bodies_encodings_2 = average_without_padding_cnn(encode_bodies_2, b2, cuda=args.cuda)
@@ -319,7 +346,10 @@ def train_model(model, train, dev_data, test_data, ids_corpus, batch_size, args,
                     acc = accuracy_score(d, preds.cpu().data.numpy())
                     print("Discriminator accuracy:", acc)
                 # Calculate total cost
-                total_cost = loss - (args.lam * loss_2)
+                if args.autoencoder:
+                    total_cost = loss - (args.lam * loss_2) + (args.lam2 * loss_3)
+                else:
+                    total_cost = loss - (args.lam * loss_2)
                 total_cost.backward()
                 optimizer.step()
                 optimizer_2.step()

@@ -103,9 +103,12 @@ def main(args, results_lock=None):
             # Create Batch2 batches
             if args.domain_adaptation:
                 train_2 = myio.create_discriminator_batches(ids_corpus, ids_android_corpus, (len(train) / args.batch_size + 1))
-                train_utils.train_model(model, train, dev, test, ids_corpus, args.batch_size, args, model_2, train_2, results_lock)
-            elif args.autoencoder:
-                train_utils.train_autoencoder(model, train, dev, test, ids_corpus, ids_android_corpus, args.batch_size, args)
+                if args.autoencoder:
+                    train_utils.train_model(model, train, dev, test, ids_corpus, args.batch_size, args, model_2, train_2, ids_android_corpus, results_lock)
+                else:
+                    train_utils.train_model(model, train, dev, test, ids_corpus, args.batch_size, args, model_2, train_2, results_lock)
+            # elif args.autoencoder:
+            #     train_utils.train_autoencoder(model, train, dev, test, ids_corpus, ids_android_corpus, args.batch_size, args)
             else:
                 train_utils.train_model(model, train, dev, test, ids_corpus, args.batch_size, args)
 
@@ -141,6 +144,7 @@ if __name__ == '__main__':
     parser.add_argument('--epochs', type=int, default=20, help='number of epochs for train [default: 256]')
     parser.add_argument('--batch_size', type=int, default=32, help='batch size for training [default: 64]')
     parser.add_argument('--lam', type=float, default=0.0001, help='constant multiplier on loss 2 in domain adaptation')
+    parser.add_argument('--lam2', type=float, default=0.0001, help='constant multiplier on loss 3 in autoencoder domain adaptation')
     # data
     parser.add_argument('--embeddings_path', type=str, default='../../askubuntu/vector/vectors_pruned.200.txt.gz', help='path for word embeddings')
     parser.add_argument('--cased', action='store_true', default=False, help="use cased glove embeddings")
@@ -165,6 +169,7 @@ if __name__ == '__main__':
 
     parser.add_argument('--show_discr_loss', action='store_true', default=False, help="print out discriminator loss and accuracy each batch")
     parser.add_argument('--autoencoder', action='store_true', default=False, help="run autoencoder version of cnn")
+    parser.add_argument('--debug', action='store_true', default=False)
 
     args = parser.parse_args()
 
