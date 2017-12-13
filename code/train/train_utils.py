@@ -113,7 +113,6 @@ def compute_tfidf_rankings(data, vectorizer, meter):
 def embed(x, embeddings, cuda):
     vocab_size, embed_dim = embeddings.shape
     embedding_layer = nn.Embedding(vocab_size, embed_dim)
-    embedding_layer.cuda()
     embedding_layer.weight.data = torch.from_numpy(embeddings)
     embedding_layer.weight.requires_grad = False
     embedding_model = nn.Sequential(embedding_layer)
@@ -122,12 +121,14 @@ def embed(x, embeddings, cuda):
     return embedding_model(x)
 
 def train_gan(transformer, discriminator, encoder, transformer_batches, discriminator_batches, encoder_batches, dev_data, test_data, args, embeddings, results_lock=None):
-    if args.cuda:
-        transformer.cuda()
-        discriminator.cuda()
-        encoder.cuda()
     ones = torch.ones(discriminator_batches[0][0].size()[0])
     zeros = torch.zeros(discriminator_batches[0][0].size()[0])
+    if args.cuda:
+        transformer = transformer.cuda()
+        discriminator = discriminator.cuda()
+        encoder = encoder.cuda()
+        ones = ones.cuda()
+        zeros = zeros.cuda()
     optimizer_d = torch.optim.Adam(discriminator.parameters(), lr=args.lr_d)
     parameters_t = ifilter(lambda p: p.requires_grad, transformer.parameters())
     optimizer_t = torch.optim.Adam(parameters_t, lr=args.lr_t)
