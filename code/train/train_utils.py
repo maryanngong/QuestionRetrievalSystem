@@ -109,8 +109,14 @@ def compute_tfidf_rankings(data, vectorizer, meter):
         res.append(ranked_labels)
     return res
 
+def embed(x, embeddings):
+    vocab_size, embed_dim = embeddings.shape
+    embedding_layer = nn.Embedding(vocab_size, embed_dim)
+    embedding_layer.weight.data = torch.from_numpy(embeddings)
+    embedding_layer.weight.requires_grad = False
+    return embedding_layer(x)
 
-def train_gan(transformer, discriminator, encoder, transformer_batches, discriminator_batches, encoder_batches, dev_data, test_data, args, results_lock=None):
+def train_gan(transformer, discriminator, encoder, transformer_batches, discriminator_batches, encoder_batches, dev_data, test_data, args, embeddings, results_lock=None):
     if args.cuda:
         transformer.cuda()
         discriminator.cuda()
@@ -144,8 +150,10 @@ def train_gan(transformer, discriminator, encoder, transformer_batches, discrimi
                     titles_s, bodies_s, titles_t, bodies_t = [x.cuda() for x in (titles_s, bodies_s, titles_t, bodies_t)]
                 # TODO test if changing variable names matters
                 # Train on real target data
-                is_target_titles = discriminator(titles_t)
-                is_target_bodies = discriminator(bodies_t)
+                embedded_titles_t = embed(titles_t, embeddings)
+                embedded_bodies_t = embed(bodies_t, embeddings)
+                is_target_titles = discriminator(embedded_titles_t)
+                is_target_bodies = discriminator(embedded_bodies_t)
                 loss_real = F.binary_cross_entropy_with_logits(is_target_titles, ones) + F.binary_cross_entropy_with_logits(is_target_bodies, ones)
                 # Train on fake (transformed source) data
                 is_target_titles = discriminator(transformer(titles_s))
