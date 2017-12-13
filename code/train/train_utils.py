@@ -45,6 +45,15 @@ def average_without_padding_cnn(x, ids, eps=1e-8, padding_id=0, cuda=True):
     s = torch.sum(x*mask, 2) / (torch.sum(mask, 2)+eps)
     return s
 
+def mask(x, ids, padding_id=0, cuda=True):
+    mask = ids != padding_id
+    mask = mask.type(torch.FloatTensor)
+    mask = autograd.Variable(mask.unsqueeze(2), requires_grad=False)
+    if cuda:
+        mask = mask.cuda()
+    masked_x = x*mask
+    return masked_x
+
 def evaluate(model_data=None, model=None, args=None, vectorizer=None, vectorizer_data=None):
     results = []
     meter = AUCMeter()
@@ -162,8 +171,8 @@ def train_gan(transformer, discriminator, encoder, transformer_batches, discrimi
                 is_target_bodies = discriminator(embedded_bodies_t)
                 loss_real = F.binary_cross_entropy_with_logits(is_target_titles, ones) + F.binary_cross_entropy_with_logits(is_target_bodies, ones)
                 # Train on fake (transformed source) data
-                is_target_titles = discriminator(transformer(titles_s))
-                is_target_bodies = discriminator(transformer(bodies_s))
+                is_target_titles = discriminator(mask(transformer(titles_s), titles_s.cpu().data, cuda=args.cuda))
+                is_target_bodies = discriminator(mask(transformer(bodies_s), bodies_s.cpu().data, cuda=args.cuda))
                 loss_fake = F.binary_cross_entropy_with_logits(is_target_titles, zeros) + F.binary_cross_entropy_with_logits(is_target_bodies, zeros)
                 # Compute gradients and backprop
                 total_discriminator_loss = loss_real + loss_fake
@@ -176,8 +185,8 @@ def train_gan(transformer, discriminator, encoder, transformer_batches, discrimi
             titles_s, bodies_s, _, _ = [autograd.Variable(x) for x in data]
             if args.cuda:
                 titles_s, bodies_s = [x.cuda() for x in (titles_s, bodies_s)]
-            is_target_titles = discriminator(transformer(titles_s))
-            is_target_bodies = discriminator(transformer(bodies_s))
+            is_target_titles = discriminator(mask(transformer(titles_s), titles_s.cpu().data, cuda=args.cuda))
+            is_target_bodies = discriminator(mask(transformer(bodies_s), bodies_s.cpu().data, cuda=args.cuda))
             total_transformer_loss = F.binary_cross_entropy_with_logits(is_target_titles, ones) + F.binary_cross_entropy_with_logits(is_target_bodies, ones)
             losses_t.append(total_transformer_loss.cpu().data[0])
             optimizer_t.zero_grad()
@@ -193,10 +202,10 @@ def train_gan(transformer, discriminator, encoder, transformer_batches, discrimi
             titles_s, bodies_s = [autograd.Variable(x) for x in (titles_s, bodies_s)]
             if args.cuda:
                 titles_s, bodies_s = [x.cuda() for x in (titles_s, bodies_s)]
-            encoded_titles = encoder(transformer(titles_s))
-            encoded_bodies = encoder(transformer(bodies_s))
-            avg_encoded_titles = average_without_padding_cnn(encoded_titles, titles_s.cpu().data.numpy(), cuda=args.cuda)
-            avg_encoded_bodies = average_without_padding_cnn(encoded_bodies, bodies_s.cpu().data.numpy(), cuda=args.cuda)
+            encoded_titles = encoder(mask(transformer(titles_s), titles_s.cpu().data, cuda=args.cuda))
+            encoded_bodies = encoder(mask(transformer(bodies_s), bodies_s.cpu().data, cuda=args.cuda))
+            avg_encoded_titles = average_without_padding_cnn(encoded_titles, titles_s.cpu().data, cuda=args.cuda)
+            avg_encoded_bodies = average_without_padding_cnn(encoded_bodies, bodies_s.cpu().data, cuda=args.cuda)
             avg_encoded_text = (avg_encoded_titles + avg_encoded_bodies) * 0.5
             scores, target_indices = score_utils.batch_cosine_similarity(avg_encoded_text, train_group_ids, args.cuda)
             total_encoder_loss = F.multi_margin_loss(scores, target_indices, margin=args.margin)
