@@ -54,13 +54,13 @@ def mask(x, ids, padding_id=0, cuda=True):
     masked_x = x*mask
     return masked_x
 
-def evaluate(model_data=None, model=None, args=None, vectorizer=None, vectorizer_data=None):
+def evaluate(model_data=None, model=None, args=None, vectorizer=None, vectorizer_data=None, embeddings=None):
     results = []
     meter = AUCMeter()
     if model is not None:
         model.eval()
         print("Computing Model Evaluation Metrics...")
-        results = compute_model_rankings(model_data, model, args, meter)
+        results = compute_model_rankings(model_data, model, args, meter, embeddings)
     if vectorizer is not None:
         if vectorizer_data is None:
             print("No vectorizer compatible data. Aborting...")
@@ -75,12 +75,15 @@ def evaluate(model_data=None, model=None, args=None, vectorizer=None, vectorizer
     auc5 = meter.value(max_fpr=0.05)
     return MAP, MRR, P1, P5, auc5
 
-def compute_model_rankings(data, model, args, meter):
+def compute_model_rankings(data, model, args, meter, embeddings=None):
     res = []
     for idts, idbs, labels in tqdm(data):
         titles, bodies = autograd.Variable(idts), autograd.Variable(idbs)
         if args.cuda:
             titles, bodies = titles.cuda(), bodies.cuda()
+        if embeddings:
+            titles = embed(titles, embeddings, args.cuda)
+            bodies = embed(bodies, embeddings, args.cuda)
         encode_titles = model(titles)
         encode_bodies = model(bodies)
 
@@ -218,10 +221,10 @@ def train_gan(transformer, discriminator, encoder, transformer_batches, discrimi
         # Evaluation
         encoder.eval()
         print("Dev data performance")
-        _, _, _, _, AUC05_dev = evaluate(model_data=dev_data, model=encoder, args=args)
+        _, _, _, _, AUC05_dev = evaluate(model_data=dev_data, model=encoder, args=args, embeddings=embeddings)
         print(tabulate([[AUC05_dev]], headers=['AUC_0.5']))
         print("\nTest data performance")
-        _, _, _, _, AUC05_test = evaluate(model_data=test_data, model=encoder, args=args)
+        _, _, _, _, AUC05_test = evaluate(model_data=test_data, model=encoder, args=args, embeddings=embeddings)
         print(tabulate([[AUC05_test]], headers=['AUC_0.5']))
         if AUC05_dev > best_AUC05_dev:
             best_AUC05_dev = AUC05_dev
