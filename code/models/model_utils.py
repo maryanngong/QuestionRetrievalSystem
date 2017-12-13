@@ -58,7 +58,7 @@ class Transformer(nn.Module):
         noise = torch.autograd.Variable(torch.FloatTensor(x.size()[0], x.size()[1], 1).uniform_(-1, 1))
         if self.args.cuda:
             noise = noise.cuda()
-        torch.cat((x, noise), 2)
+        x = torch.cat((x, noise), 2)
         x = F.elu(self.fc1(x))
         x = F.dropout(x, p=self.args.dropout_t, training=self.training)
         x = F.sigmoid(self.fc2(x))
