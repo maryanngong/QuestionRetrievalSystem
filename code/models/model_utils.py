@@ -101,7 +101,7 @@ class Encoder(nn.Module):
         _, embed_dim = embeddings.shape
         self.conv1 = nn.Conv1d(embed_dim, args.num_hidden, kernel_size=3)
 
-    def forward(self, x_indx):
+    def forward(self, x):
         # reorder dimensions for convolutional layer
         x = x.permute(0,2,1)
         x = F.dropout(x, p=self.args.dropout, training=self.training)
