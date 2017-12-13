@@ -122,7 +122,10 @@ def main(args, results_lock=None):
             # Create Batch2 batches
             if args.gan_training:
                 encoder_batches = myio.create_batches(ids_corpus, train, args.batch_size, 0, pad_left=False)
-                discriminator_batches = myio.create_discriminator_batches_parallel(ids_corpus, ids_android_corpus, (args.dk * len(train) / args.batch_size), should_perm=False, pad_max=args.pad_max)
+                d_num_batches = (args.dk * len(train) / args.batch_size)
+                if args.wgan:
+                    d_num_batches += (100 * 25) + (100 * (len(train) / args.batch_size / 500))
+                discriminator_batches = myio.create_discriminator_batches_parallel(ids_corpus, ids_android_corpus, d_num_batches, should_perm=False, pad_max=args.pad_max)
                 transformer_batches = myio.create_discriminator_batches_parallel(ids_corpus, ids_android_corpus, (len(train) / args.batch_size), should_perm=False, pad_max=args.pad_max)
                 train_utils.train_gan(encoder=encoder, transformer=transformer, discriminator=discriminator, encoder_batches=encoder_batches, discriminator_batches=discriminator_batches, transformer_batches=transformer_batches, dev_data=dev, test_data=test, args=args, embeddings=embeddings, results_lock=results_lock)
             elif args.domain_adaptation:
@@ -158,6 +161,7 @@ if __name__ == '__main__':
     # task
     parser.add_argument('-d', '--domain_adaptation', action='store_true', default=False, help='choose adaptation transfer setting')
     parser.add_argument('-g', '--gan_training', action='store_true', default=False, help='choose gan training style')
+    parser.add_argument('-w', '--wgan', action='store_true', default=False, help='wgan modifications on gan training style')
     # learning
     parser.add_argument('--lr', type=float, default=0.001, help='initial learning rate [default: 0.001]')
     parser.add_argument('--lr2', type=float, default=-0.001, help='initial learning rate [default: -0.001]')
