@@ -121,8 +121,8 @@ def embed(x, embeddings, cuda):
     return embedding_model(x)
 
 def train_gan(transformer, discriminator, encoder, transformer_batches, discriminator_batches, encoder_batches, dev_data, test_data, args, embeddings, results_lock=None):
-    ones = torch.ones(discriminator_batches[0][0].size()[0])
-    zeros = torch.zeros(discriminator_batches[0][0].size()[0])
+    ones = autograd.Variable(torch.ones(discriminator_batches[0][0].size()[0]), requires_grad=False)
+    zeros = autograd.Variable(torch.zeros(discriminator_batches[0][0].size()[0]), requires_grad=False)
     if args.cuda:
         transformer = transformer.cuda()
         discriminator = discriminator.cuda()
