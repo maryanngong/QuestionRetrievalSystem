@@ -141,11 +141,16 @@ def train_gan(transformer, discriminator, encoder, transformer_batches, discrimi
         encoder = encoder.cuda()
         ones = ones.cuda()
         zeros = zeros.cuda()
-    optimizer_d = torch.optim.Adam(discriminator.parameters(), lr=args.lr_d)
     parameters_t = ifilter(lambda p: p.requires_grad, transformer.parameters())
-    optimizer_t = torch.optim.Adam(parameters_t, lr=args.lr_t)
     parameters_e = ifilter(lambda p: p.requires_grad, encoder.parameters())
-    optimizer_e = torch.optim.Adam(parameters_e, lr=args.lr)
+    if args.wgan:
+        optimizer_d = torch.optim.RMSprop(discriminator.parameters(), lr=5e-5)
+        optimizer_t = torch.optim.RMSprop(parameters_t, lr=5e-5)
+        optimizer_e = torch.optim.RMSprop(parameters_e, lr=5e-5)
+    else:
+        optimizer_d = torch.optim.Adam(discriminator.parameters(), lr=args.lr_d)
+        optimizer_t = torch.optim.Adam(parameters_t, lr=args.lr_t)
+        optimizer_e = torch.optim.Adam(parameters_e, lr=args.lr)
     best_epoch = 0
     best_AUC05_dev = 0.0
     best_AUC05_test = 0.0
@@ -158,11 +163,16 @@ def train_gan(transformer, discriminator, encoder, transformer_batches, discrimi
         losses_d = []
         losses_t = []
         losses_e = []
+        index_d = 0
         for num_batch in xrange(len(transformer_batches)):
             print("ADVERSERIAL BATCH #{} of {}".format(num_batch, len(transformer_batches)))
             # k Discriminator batches
-            for num_batch_d in xrange(args.dk):
-                data = discriminator_batches[(num_batch * args.dk) + num_batch_d]
+            dk = args.dk
+            if args.wgan:
+                if (epoch == 0 and num_batch < 20) or (epoch * num_batch % 500 == 0):
+                    dk = 100
+            for num_batch_d in xrange(dk):
+                data = discriminator_batches[index_d + num_batch_d]
                 titles_s, bodies_s, titles_t, bodies_t = [autograd.Variable(x) for x in data]
                 if args.cuda:
                     titles_s, bodies_s, titles_t, bodies_t = [x.cuda() for x in (titles_s, bodies_s, titles_t, bodies_t)]
@@ -179,10 +189,19 @@ def train_gan(transformer, discriminator, encoder, transformer_batches, discrimi
                 loss_fake = F.binary_cross_entropy_with_logits(is_target_titles_s, zeros) + F.binary_cross_entropy_with_logits(is_target_bodies_s, zeros)
                 # Compute gradients and backprop
                 total_discriminator_loss = loss_real + loss_fake
+                if args.wgan:
+                    loss_t = -(torch.mean(is_target_titles_t) - torch.mean(is_target_titles_s))
+                    loss_b = -(torch.mean(is_target_bodies_t) - torch.mean(is_target_bodies_s))
+                    total_discriminator_loss = loss_t + loss_b
                 losses_d.append(total_discriminator_loss.cpu().data[0])
                 optimizer_d.zero_grad()
                 total_discriminator_loss.backward()
                 optimizer_d.step()
+                if args.wgan:
+                    for p in discriminator.parameters():
+                        p.data.clamp_(-0.01, 0.01)
+            # Update index for disc batches
+            index_d += dk
             # Transformer batch
             data = transformer_batches[num_batch]
             titles_s, bodies_s, _, _ = [autograd.Variable(x) for x in data]
@@ -191,6 +210,8 @@ def train_gan(transformer, discriminator, encoder, transformer_batches, discrimi
             is_target_titles = discriminator(mask(transformer(titles_s), titles_s.cpu().data, cuda=args.cuda))
             is_target_bodies = discriminator(mask(transformer(bodies_s), bodies_s.cpu().data, cuda=args.cuda))
             total_transformer_loss = F.binary_cross_entropy_with_logits(is_target_titles, ones) + F.binary_cross_entropy_with_logits(is_target_bodies, ones)
+            if args.wgan:
+                total_transformer_loss = -(torch.mean(is_target_titles)) - (torch.mean(is_target_bodies))
             losses_t.append(total_transformer_loss.cpu().data[0])
             optimizer_t.zero_grad()
             total_transformer_loss.backward()
