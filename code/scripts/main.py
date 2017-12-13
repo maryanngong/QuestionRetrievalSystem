@@ -115,7 +115,7 @@ def main(args, results_lock=None):
             train = myio.read_annotations('../../askubuntu/train_random.txt')
             # Create Batch2 batches
             if args.gan_training:
-                encoder_batches = myio.create_batches(ids_corpus, ,)
+                encoder_batches = myio.create_batches(ids_corpus, train, batch_size, 0, pad_left=False)
                 discriminator_batches = myio.create_discriminator_batches(ids_corpus, ids_android_corpus, (5 * len(train) / args.batch_size + 1), should_perm=False)
                 transformer_batches = myio.create_discriminator_batches(ids_corpus, ids_android_corpus, (len(train) / args.batch_size + 1), should_perm=False)
                 train_utils.train_gan(encoder=encoder, transformer=transformer, discriminator=discriminator, encoder_batches=encoder_batches, discriminator_batches=discriminator_batches, transformer_batches=transformer_batches, dev_data=dev, test_data=test, args=args, results_lock=results_lock)
