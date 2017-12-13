@@ -168,12 +168,14 @@ def train_gan(transformer, discriminator, encoder, transformer_batches, discrimi
         for num_batch in xrange(len(transformer_batches)):
             print("ADVERSERIAL BATCH #{} of {}".format(num_batch, len(transformer_batches)))
             # k Discriminator batches
+            for p in discriminator.parameters():
+                p.requires_grad = True
             dk = args.dk
             if args.wgan:
                 if (epoch == 0 and num_batch < 20) or (epoch * num_batch % 500 == 0):
                     dk = 100
             for num_batch_d in xrange(dk):
-                if args.wgan:
+                if args.wgan and (not args.grad_penalty):
                     for p in discriminator.parameters():
                         p.data.clamp_(-0.01, 0.01)
                 data = discriminator_batches[index_d + num_batch_d]
@@ -186,17 +188,25 @@ def train_gan(transformer, discriminator, encoder, transformer_batches, discrimi
                 embedded_bodies_t = embedding_model(bodies_t)
                 is_target_titles_t = discriminator(embedded_titles_t)
                 is_target_bodies_t = discriminator(embedded_bodies_t)
-                loss_real = F.binary_cross_entropy_with_logits(is_target_titles_t, ones) + F.binary_cross_entropy_with_logits(is_target_bodies_t, ones)
+                loss_real = (F.binary_cross_entropy_with_logits(is_target_titles_t, ones) + F.binary_cross_entropy_with_logits(is_target_bodies_t, ones)) * 0.5
                 # Train on fake (transformed source) data
-                is_target_titles_s = discriminator(mask(transformer(titles_s), titles_s.cpu().data, cuda=args.cuda))
-                is_target_bodies_s = discriminator(mask(transformer(bodies_s), bodies_s.cpu().data, cuda=args.cuda))
-                loss_fake = F.binary_cross_entropy_with_logits(is_target_titles_s, zeros) + F.binary_cross_entropy_with_logits(is_target_bodies_s, zeros)
+                transformed_titles_s = mask(transformer(titles_s), titles_s.cpu().data, cuda=args.cuda)
+                transformed_bodies_s = mask(transformer(bodies_s), bodies_s.cpu().data, cuda=args.cuda)
+                is_target_titles_s = discriminator(transformed_titles_s)
+                is_target_bodies_s = discriminator(transformed_bodies_s)
+                loss_fake = (F.binary_cross_entropy_with_logits(is_target_titles_s, zeros) + F.binary_cross_entropy_with_logits(is_target_bodies_s, zeros)) * 0.5
                 # Compute gradients and backprop
                 total_discriminator_loss = loss_real + loss_fake
                 if args.wgan:
                     loss_t = (torch.mean(is_target_titles_t) - torch.mean(is_target_titles_s))
                     loss_b = (torch.mean(is_target_bodies_t) - torch.mean(is_target_bodies_s))
-                    total_discriminator_loss = loss_t + loss_b
+                    total_discriminator_loss = (loss_t + loss_b) * 0.5
+                    if args.grad_penalty:
+                        # TODO finish implementing grad penalty
+                        dist = ((embedded_titles_t-transformed_titles_s)**2).sum(1)**0.5
+                        lipschitz_est = (is_target_titles_t-is_target_titles_s).abs()/(dist+1e-8)
+                        lipschitz_loss = args.gam*((1.0-lipschitz_est)**2).mean(0).view(1)
+                        total_discriminator_loss += lipschitz_loss
                 losses_d.append(total_discriminator_loss.cpu().data[0])
                 optimizer_d.zero_grad()
                 total_discriminator_loss.backward()
@@ -204,15 +214,17 @@ def train_gan(transformer, discriminator, encoder, transformer_batches, discrimi
             # Update index for disc batches
             index_d += dk
             # Transformer batch
+            for p in discriminator.parameters():
+                p.requires_grad = False
             data = transformer_batches[num_batch]
             titles_s, bodies_s, _, _ = [autograd.Variable(x) for x in data]
             if args.cuda:
                 titles_s, bodies_s = [x.cuda() for x in (titles_s, bodies_s)]
             is_target_titles = discriminator(mask(transformer(titles_s), titles_s.cpu().data, cuda=args.cuda))
             is_target_bodies = discriminator(mask(transformer(bodies_s), bodies_s.cpu().data, cuda=args.cuda))
-            total_transformer_loss = F.binary_cross_entropy_with_logits(is_target_titles, ones) + F.binary_cross_entropy_with_logits(is_target_bodies, ones)
+            total_transformer_loss = (F.binary_cross_entropy_with_logits(is_target_titles, ones) + F.binary_cross_entropy_with_logits(is_target_bodies, ones)) * 0.5
             if args.wgan:
-                total_transformer_loss = (torch.mean(is_target_titles)) + (torch.mean(is_target_bodies))
+                total_transformer_loss = (torch.mean(is_target_titles) + torch.mean(is_target_bodies)) * 0.5
             losses_t.append(total_transformer_loss.cpu().data[0])
             optimizer_t.zero_grad()
             total_transformer_loss.backward()

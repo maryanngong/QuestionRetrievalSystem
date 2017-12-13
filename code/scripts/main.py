@@ -163,6 +163,7 @@ if __name__ == '__main__':
     parser.add_argument('-d', '--domain_adaptation', action='store_true', default=False, help='choose adaptation transfer setting')
     parser.add_argument('-g', '--gan_training', action='store_true', default=False, help='choose gan training style')
     parser.add_argument('-w', '--wgan', action='store_true', default=False, help='wgan modifications on gan training style')
+    parser.add_argument('-p', '--grad-penalty', action='store_true', default=False)
     # learning
     parser.add_argument('--lr', type=float, default=0.001, help='initial learning rate [default: 0.001]')
     parser.add_argument('--lr2', type=float, default=-0.001, help='initial learning rate [default: -0.001]')
@@ -172,6 +173,7 @@ if __name__ == '__main__':
     parser.add_argument('--batch_size', type=int, default=32, help='batch size for training [default: 64]')
     parser.add_argument('-k', '--dk', type=int, default=5, help='number of discriminator batches per transformer batch')
     parser.add_argument('--lam', type=float, default=0.0001, help='constant multiplier on loss 2 in domain adaptation')
+    parser.add_argument('--gam', type=float, default=0.1, help='constant multiplier on loss 2 in domain adaptation')
     # data
     parser.add_argument('--embeddings_path', type=str, default='../../askubuntu/vector/vectors_pruned.200.txt.gz', help='path for word embeddings')
     parser.add_argument('--cased', action='store_true', default=False, help="use cased glove embeddings")
