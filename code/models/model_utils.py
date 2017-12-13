@@ -87,7 +87,7 @@ class Discriminator(nn.Module):
     def forward(self, x):
         batch_size = x.size()[0]
         h0, c0 = self.init_hidden_states(batch_size)
-        _, (h_n, c_n) = self.rnn(all_x, (h0, c0))
+        _, (h_n, c_n) = self.rnn(x, (h0, c0))
         out = self.fc1(h_n)
         return out
 

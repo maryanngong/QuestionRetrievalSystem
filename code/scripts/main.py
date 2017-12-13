@@ -169,7 +169,7 @@ if __name__ == '__main__':
     parser.add_argument('--model_name_2', nargs="?", type=str, default='ffn', choices=['ffn'], help="Discriminator model type")
     parser.add_argument('--num_hidden', type=int, default=512, help="encoding size.")
     parser.add_argument('--num_hidden_transformer', type=int, default=100, help="encoding size.")
-    parser.add_argument('--num_hidden_discriminator', type=int, default=100, help="encoding size.")
+    parser.add_argument('--num_hidden_discriminator', type=int, default=200, help="encoding size.")
     parser.add_argument('--dropout', type=float, default=0.0, help="dropout parameter")
     parser.add_argument('--dropout_d', type=float, default=0.0, help="dropout parameter for discriminator")
     parser.add_argument('--dropout_t', type=float, default=0.0, help="dropout parameter for transformer")
