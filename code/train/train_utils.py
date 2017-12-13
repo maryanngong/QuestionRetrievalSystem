@@ -195,8 +195,8 @@ def train_gan(transformer, discriminator, encoder, transformer_batches, discrimi
                 titles_s, bodies_s = [x.cuda() for x in (titles_s, bodies_s)]
             encoded_titles = encoder(transformer(titles_s))
             encoded_bodies = encoder(transformer(bodies_s))
-            avg_encoded_titles = average_without_padding_cnn(encoded_titles, titles_s.cpu().data.numpy(), cuda=args.cuda)
-            avg_encoded_bodies = average_without_padding_cnn(encoded_bodies, bodies_s.cpu().data.numpy(), cuda=args.cuda)
+            avg_encoded_titles = average_without_padding_cnn(encoded_titles, titles_s, cuda=args.cuda)
+            avg_encoded_bodies = average_without_padding_cnn(encoded_bodies, bodies_s, cuda=args.cuda)
             avg_encoded_text = (avg_encoded_titles + avg_encoded_bodies) * 0.5
             scores, target_indices = score_utils.batch_cosine_similarity(avg_encoded_text, train_group_ids, args.cuda)
             total_encoder_loss = F.multi_margin_loss(scores, target_indices, margin=args.margin)
