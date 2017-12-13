@@ -70,11 +70,15 @@ def main(args, results_lock=None):
         if args.snapshot is None:
             model = model_utils.get_model(embeddings, args, args.model_name)
             if args.gan_training:
-                transformer = model_utils.get_model(embeddings, args, 'transformer')
                 if args.simple_discriminator:
                     discriminator_name = 'simple_discriminator'
                 else:
                     discriminator_name = 'discriminator'
+                if args.complex_transformer:
+                    transformer_name = 'complex_transformer'
+                else:
+                    transformer_name = 'transformer'
+                transformer = model_utils.get_model(embeddings, args, transformer_name)
                 discriminator = model_utils.get_model(embeddings, args, discriminator_name)
                 encoder = model_utils.get_model(embeddings, args, 'encoder')
             elif args.domain_adaptation:
@@ -180,6 +184,7 @@ if __name__ == '__main__':
     parser.add_argument('--model_name', nargs="?", type=str, default='cnn3', choices=['dan', 'cnn2', 'cnn3', 'cnn4', 'lstm_bi', 'lstm_bi_fc', 'lstm3', 'tfidf'], help="Encoder model type [dan, cnn2, cnn3, cnn4, lstm_bi, lstm_bi_fc, lstm3]")
     parser.add_argument('--model_name_2', nargs="?", type=str, default='ffn', choices=['ffn'], help="Discriminator model type")
     parser.add_argument('--simple_discriminator', action='store_true', default=False, help="use simple linear discriminator")
+    parser.add_argument('--complex_transformer', action='store_true', default=False, help="use more complex transformer")
     parser.add_argument('--num_hidden', type=int, default=512, help="encoding size.")
     parser.add_argument('--num_hidden_transformer', type=int, default=200, help="encoding size.")
     parser.add_argument('--num_hidden_discriminator', type=int, default=200, help="encoding size.")

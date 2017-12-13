@@ -18,6 +18,8 @@ def get_model(embeddings, args, model_name):
         return Discriminator(embeddings, args)
     elif model_name =='simple_discriminator':
         return SimpleDiscriminator(embeddings, args)
+    elif model_name =='complex_transformer':
+        return ComplexTransformer(embeddings, args)
     elif model_name == 'transformer':
         return Transformer(embeddings, args)
     elif model_name == 'encoder':
@@ -67,6 +69,43 @@ class Transformer(nn.Module):
         out = self.fc3(x)
         return out
 
+class ComplexTransformer(nn.Module):
+
+    def __init__(self, embeddings, args):
+        super(ComplexTransformer, self).__init__()
+        self.args = args
+        vocab_size, embed_dim = embeddings.shape
+
+        self.embedding_layer = nn.Embedding( vocab_size, embed_dim)
+        self.embedding_layer.weight.data = torch.from_numpy( embeddings )
+        self.embedding_layer.weight.requires_grad = False
+
+        self.rnn = nn.LSTM(input_size=embed_dim+1, hidden_size=args.num_hidden_transformer // 2,
+                          num_layers=1, batch_first=True, bidirectional=True, dropout=args.dropout_t)
+        self.fc1 = nn.Linear(args.num_hidden_transformer, embed_dim)
+
+
+    def init_hidden_states(self, batch_size):
+        h0 = autograd.Variable(torch.randn(2, batch_size, self.args.num_hidden_transformer // 2))
+        c0 = autograd.Variable(torch.randn(2, batch_size, self.args.num_hidden_transformer// 2))
+        if self.args.cuda:
+            h0 = h0.cuda()
+            c0 = c0.cuda()
+        return (h0, c0)
+
+    def forward(self, x):
+        x = self.embedding_layer(x)
+        noise = torch.autograd.Variable(torch.FloatTensor(x.size()[0], x.size()[1], 1).uniform_(-1, 1))
+        if self.args.cuda:
+            noise = noise.cuda()
+        x = torch.cat((x, noise), 2)
+        batch_size = x.size()[0]
+        h0, c0 = self.init_hidden_states(batch_size)
+        out, (h_n, c_n) = self.rnn(x, (h0, c0))
+        out = self.fc1(out)
+        return out
+
+
 
 class Discriminator(nn.Module):
 
@@ -100,13 +139,13 @@ class SimpleDiscriminator(nn.Module):
         self.args = args
         _, embed_dim = embeddings.shape
         self.fc1 = nn.Linear(embed_dim*100, args.num_hidden_discriminator)
-        self.fc2 = nn.Linear(args.num_hidden_discriminator, args.num_hidden_discriminator)
+        # self.fc2 = nn.Linear(args.num_hidden_discriminator, args.num_hidden_discriminator)
         self.fc3 = nn.Linear(args.num_hidden_discriminator, 1)
 
     def forward(self, x):
         xf = x.view(-1, x.size()[1]*x.size()[2])
         h = F.elu(self.fc1(xf))
-        h = F.elu(self.fc2(h))
+        # h = F.elu(self.fc2(h))
         out = self.fc3(h)
         return out
 
