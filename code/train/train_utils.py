@@ -167,13 +167,13 @@ def train_gan(transformer, discriminator, encoder, transformer_batches, discrimi
                 # Train on real target data
                 embedded_titles_t = embed(titles_t, embeddings, args.cuda)
                 embedded_bodies_t = embed(bodies_t, embeddings, args.cuda)
-                is_target_titles = discriminator(embedded_titles_t)
-                is_target_bodies = discriminator(embedded_bodies_t)
-                loss_real = F.binary_cross_entropy_with_logits(is_target_titles, ones) + F.binary_cross_entropy_with_logits(is_target_bodies, ones)
+                is_target_titles_t = discriminator(embedded_titles_t)
+                is_target_bodies_t = discriminator(embedded_bodies_t)
+                loss_real = F.binary_cross_entropy_with_logits(is_target_titles_t, ones) + F.binary_cross_entropy_with_logits(is_target_bodies_t, ones)
                 # Train on fake (transformed source) data
-                is_target_titles = discriminator(mask(transformer(titles_s), titles_s.cpu().data, cuda=args.cuda))
-                is_target_bodies = discriminator(mask(transformer(bodies_s), bodies_s.cpu().data, cuda=args.cuda))
-                loss_fake = F.binary_cross_entropy_with_logits(is_target_titles, zeros) + F.binary_cross_entropy_with_logits(is_target_bodies, zeros)
+                is_target_titles_s = discriminator(mask(transformer(titles_s), titles_s.cpu().data, cuda=args.cuda))
+                is_target_bodies_s = discriminator(mask(transformer(bodies_s), bodies_s.cpu().data, cuda=args.cuda))
+                loss_fake = F.binary_cross_entropy_with_logits(is_target_titles_s, zeros) + F.binary_cross_entropy_with_logits(is_target_bodies_s, zeros)
                 # Compute gradients and backprop
                 total_discriminator_loss = loss_real + loss_fake
                 losses_d.append(total_discriminator_loss.cpu().data[0])
