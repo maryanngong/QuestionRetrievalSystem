@@ -118,8 +118,8 @@ def embed(x, embeddings, cuda):
     embedding_layer.weight.requires_grad = False
     embedding_model = nn.Sequential(embedding_layer)
     if cuda:
-        embedding_model.cuda()
-    return embedding_layer.apply(x)
+        embedding_model = embedding_model.cuda()
+    return embedding_model(x)
 
 def train_gan(transformer, discriminator, encoder, transformer_batches, discriminator_batches, encoder_batches, dev_data, test_data, args, embeddings, results_lock=None):
     if args.cuda:

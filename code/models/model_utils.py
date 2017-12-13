@@ -60,7 +60,7 @@ class Transformer(nn.Module):
             noise = noise.cuda()
         torch.cat((x, noise), 2)
         x = F.elu(self.fc1(x))
-        x = F.dropout(x, p=args.dropout_t, training=self.training)
+        x = F.dropout(x, p=self.args.dropout_t, training=self.training)
         x = F.sigmoid(self.fc2(x))
         out = self.fc3(x)
         return out
@@ -88,7 +88,7 @@ class Discriminator(nn.Module):
         batch_size = x.size()[0]
         h0, c0 = self.init_hidden_states(batch_size)
         _, (h_n, c_n) = self.rnn(x, (h0, c0))
-        h_n = h_n.view(-1, args.num_hidden_discriminator)
+        h_n = h_n.view(-1, self.args.num_hidden_discriminator)
         out = self.fc1(h_n)
         return out
 
