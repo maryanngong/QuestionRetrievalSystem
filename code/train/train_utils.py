@@ -132,7 +132,7 @@ def get_embedding_model(embeddings, cuda):
         embedding_model = embedding_model.cuda()
     return embedding_model
 
-def train_gan(transformer, discriminator, encoder, transformer_batches, discriminator_batches, encoder_batches, dev_data, test_data, args, embeddings, results_lock=None):
+def train_gan(transformer, discriminator, encoder, transformer_batches, discriminator_batches, encoder_batches, encoder_batches_vanilla, dev_data, test_data, args, embeddings, results_lock=None):
     embedding_model = get_embedding_model(embeddings, args.cuda)
     ones = autograd.Variable(torch.ones(discriminator_batches[0][0].size()[0]), requires_grad=False).unsqueeze(1)
     zeros = autograd.Variable(torch.zeros(discriminator_batches[0][0].size()[0]), requires_grad=False).unsqueeze(1)
@@ -212,6 +212,8 @@ def train_gan(transformer, discriminator, encoder, transformer_batches, discrimi
                         lipschitz_est_bodies = (is_target_bodies_t-is_target_bodies_s).abs()/(dist_bodies+1e-8)
                         # print("LIP")
                         # print(lipschitz_est)
+                        lipschitz_est_titles = F.normalize(lipschitz_est_titles, p=2, dim=1)
+                        lipschitz_est_bodies = F.normalize(lipschitz_est_bodies, p=2, dim=1)
                         lipschitz_loss_titles = args.gam*((1.0-lipschitz_est_titles)**2).mean(0).mean(0).view(1)
                         lipschitz_loss_bodies = args.gam*((1.0-lipschitz_est_bodies)**2).mean(0).mean(0).view(1)
                         lipschitz_loss = (lipschitz_loss_titles + lipschitz_loss_bodies) * 0.5
@@ -245,22 +247,44 @@ def train_gan(transformer, discriminator, encoder, transformer_batches, discrimi
         for num_batch in xrange(len(encoder_batches)):
             print("ENCODER BATCH #{} of {}".format(num_batch, len(encoder_batches)))
             titles_s, bodies_s, train_group_ids = encoder_batches[num_batch]
+            titles_sv, bodies_sv, train_group_ids_v = encoder_batches_vanilla[num_batch]
             titles_s, bodies_s = [autograd.Variable(x) for x in (titles_s, bodies_s)]
+            titles_sv, bodies_sv = [autograd.Variable(x) for x in (titles_sv, bodies_sv)]
             if args.cuda:
                 titles_s, bodies_s = [x.cuda() for x in (titles_s, bodies_s)]
+                titles_sv, bodies_sv = [x.cuda() for x in (titles_sv, bodies_sv)]
+
             encoded_titles = encoder(mask(transformer(titles_s), titles_s.cpu().data, cuda=args.cuda))
             encoded_bodies = encoder(mask(transformer(bodies_s), bodies_s.cpu().data, cuda=args.cuda))
+            encoded_titles_v = embedding_model(titles_sv)
+            encoded_bodies_v = embedding_model(bodies_sv)
+            encoded_titles_v = encoder(encoded_titles_v)
+            encoded_bodies_v = encoder(encoded_bodies_v)
+
             avg_encoded_titles = average_without_padding_cnn(encoded_titles, titles_s.cpu().data, cuda=args.cuda)
             avg_encoded_bodies = average_without_padding_cnn(encoded_bodies, bodies_s.cpu().data, cuda=args.cuda)
             avg_encoded_text = (avg_encoded_titles + avg_encoded_bodies) * 0.5
+            avg_encoded_titles_v = average_without_padding_cnn(encoded_titles_v, titles_sv.cpu().data, cuda=args.cuda)
+            avg_encoded_bodies_v = average_without_padding_cnn(encoded_bodies_v, bodies_sv.cpu().data, cuda=args.cuda)
+            avg_encoded_text_v = (avg_encoded_titles_v + avg_encoded_bodies_v) * 0.5
+
             scores, target_indices = score_utils.batch_cosine_similarity(avg_encoded_text, train_group_ids, args.cuda)
+            scores_v, target_indices_v = score_utils.batch_cosine_similarity(avg_encoded_text_v, train_group_ids_v, args.cuda)
             total_encoder_loss = F.multi_margin_loss(scores, target_indices, margin=args.margin)
+            total_encoder_loss_v = F.multi_margin_loss(scores_v, target_indices_v, margin=args.margin)
             losses_e.append(total_encoder_loss.cpu().data[0])
+            losses_e.append(total_encoder_loss_v.cpu().data[0])
+
+            # Step for transformed encodings
             optimizer_e.zero_grad()
             total_encoder_loss.backward()
             optimizer_e.step()
+            # Step for source encodings
+            optimizer_e.zero_grad()
+            total_encoder_loss_v.backward()
+            optimizer_e.step()
             if args.verbose:
-                print("LAST ENCODER LOSS: {}".format(losses_e[-1]))
+                print("LAST ENCODER LOSSES (transf, vanilla): \n{}\n{}".format(losses_e[-2], losses_e[-1]))
         # Evaluation
         encoder.eval()
         print("Dev data performance")
