@@ -16,6 +16,8 @@ def get_model(embeddings, args, model_name):
 
     if model_name == 'discriminator':
         return Discriminator(embeddings, args)
+    elif model_name =='simple_discriminator':
+        return SimpleDiscriminator(embeddings, args)
     elif model_name == 'transformer':
         return Transformer(embeddings, args)
     elif model_name == 'encoder':
@@ -90,6 +92,22 @@ class Discriminator(nn.Module):
         _, (h_n, c_n) = self.rnn(x, (h0, c0))
         h_n = h_n.view(-1, self.args.num_hidden_discriminator)
         out = self.fc1(h_n)
+        return out
+
+class SimpleDiscriminator(nn.Module):
+    def __init__(self, embeddings, args):
+        super(SimpleDiscriminator, self).__init__()
+        self.args = args
+        _, embed_dim = embeddings.shape
+        self.fc1 = nn.Linear(embed_dim*100, args.num_hidden_discriminator)
+        self.fc2 = nn.Linear(args.num_hidden_discriminator, args.num_hidden_discriminator)
+        self.fc3 = nn.Linear(args.num_hidden_discriminator, 1)
+
+    def forward(self, x):
+        xf = x.view(-1, x.size()[1]*x.size()[2])
+        h = F.elu(self.fc1(xf))
+        h = F.elu(self.fc2(h))
+        out = self.fc3(h)
         return out
 
 

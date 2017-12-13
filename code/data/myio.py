@@ -285,7 +285,7 @@ def create_batches(ids_corpus, data, batch_size, padding_id, perm=None, pad_left
             cnt = 0
     return batches
 
-def create_discriminator_batches(ids_ubuntu_corpus, ids_android_corpus, num_batches, padding_id=0, pad_left=False, num_samples_per=20, should_perm=True):
+def create_discriminator_batches(ids_ubuntu_corpus, ids_android_corpus, num_batches, padding_id=0, pad_left=False, num_samples_per=20, should_perm=True, pad_max=False):
     batches = []
     for i in tqdm(xrange(num_batches)):
         titles = []
@@ -311,7 +311,7 @@ def create_discriminator_batches(ids_ubuntu_corpus, ids_android_corpus, num_batc
             titles = [titles[i] for i in perm]
             bodies = [bodies[i] for i in perm]
             labels = [labels[i] for i in perm]
-        titles, bodies = create_one_batch(titles, bodies, padding_id, pad_left)
+        titles, bodies = create_one_batch(titles, bodies, padding_id, pad_left, pad_max)
         if should_perm:
             batches.append((titles, bodies, labels))
         else:
@@ -321,12 +321,12 @@ def create_discriminator_batches(ids_ubuntu_corpus, ids_android_corpus, num_batc
 def f(x):
     return create_discriminator_batches(*x)
 
-def create_discriminator_batches_parallel(ids_ubuntu_corpus, ids_android_corpus, num_batches, padding_id=0, pad_left=False, num_samples_per=20, should_perm=True):
+def create_discriminator_batches_parallel(ids_ubuntu_corpus, ids_android_corpus, num_batches, padding_id=0, pad_left=False, num_samples_per=20, should_perm=True, pad_max=False):
     print("Creating random sample batches from source and target...")
     batches = []
     num_workers = 4
     pool = Pool(processes=num_workers)
-    batches_sections = pool.map(f, [(ids_ubuntu_corpus, ids_android_corpus, num_batches / num_workers, padding_id, pad_left, num_samples_per, should_perm) for i in xrange(num_workers)])
+    batches_sections = pool.map(f, [(ids_ubuntu_corpus, ids_android_corpus, num_batches / num_workers, padding_id, pad_left, num_samples_per, should_perm, pad_max) for i in xrange(num_workers)])
     batches = reduce(lambda x, y: x + y, batches_sections)
     return batches
 
@@ -411,9 +411,13 @@ def create_tfidf_batches_android(raw_corpus, pos_data, neg_data):
         lst.append((titles, bodies, np.array(qlabels)))
     return lst
 
-def create_one_batch(titles, bodies, padding_id, pad_left):
-    max_title_len = max(1, max(len(x) for x in titles))
-    max_body_len = max(1, max(len(x) for x in bodies))
+def create_one_batch(titles, bodies, padding_id, pad_left, pad_max=False):
+    if pad_max:
+        max_title_len = 100
+        max_body_len = 100
+    else:
+        max_title_len = max(1, max(len(x) for x in titles))
+        max_body_len = max(1, max(len(x) for x in bodies))
     if pad_left:
         padded_titles = [ torch.from_numpy(np.pad(x,(max_title_len-len(x),0),'constant',
                                 constant_values=padding_id).astype(np.int64)) for x in titles]
@@ -428,8 +432,11 @@ def create_one_batch(titles, bodies, padding_id, pad_left):
         return torch.stack(padded_titles), torch.stack(padded_bodies)
     return titles, bodies
 
-def create_hinge_batch(triples):
-    max_len = max(len(x) for x in triples)
+def create_hinge_batch(triples, pad_max=False):
+    if pad_max:
+        max_len = 100
+    else:
+        max_len = max(len(x) for x in triples)
     triples = np.vstack([ np.pad(x,(0,max_len-len(x)),'edge')
                         for x in triples ])
     return triples

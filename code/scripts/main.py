@@ -71,7 +71,11 @@ def main(args, results_lock=None):
             model = model_utils.get_model(embeddings, args, args.model_name)
             if args.gan_training:
                 transformer = model_utils.get_model(embeddings, args, 'transformer')
-                discriminator = model_utils.get_model(embeddings, args, 'discriminator')
+                if args.simple_discriminator:
+                    discriminator_name = 'simple_discriminator'
+                else:
+                    discriminator_name = 'discriminator'
+                discriminator = model_utils.get_model(embeddings, args, discriminator_name)
                 encoder = model_utils.get_model(embeddings, args, 'encoder')
             elif args.domain_adaptation:
                 model_2 = model_utils.get_model(None, args, args.model_name_2)
@@ -118,8 +122,8 @@ def main(args, results_lock=None):
             # Create Batch2 batches
             if args.gan_training:
                 encoder_batches = myio.create_batches(ids_corpus, train, args.batch_size, 0, pad_left=False)
-                discriminator_batches = myio.create_discriminator_batches_parallel(ids_corpus, ids_android_corpus, (args.dk * len(train) / args.batch_size), should_perm=False)
-                transformer_batches = myio.create_discriminator_batches_parallel(ids_corpus, ids_android_corpus, (len(train) / args.batch_size), should_perm=False)
+                discriminator_batches = myio.create_discriminator_batches_parallel(ids_corpus, ids_android_corpus, (args.dk * len(train) / args.batch_size), should_perm=False, pad_max=args.pad_max)
+                transformer_batches = myio.create_discriminator_batches_parallel(ids_corpus, ids_android_corpus, (len(train) / args.batch_size), should_perm=False, pad_max=args.pad_max)
                 train_utils.train_gan(encoder=encoder, transformer=transformer, discriminator=discriminator, encoder_batches=encoder_batches, discriminator_batches=discriminator_batches, transformer_batches=transformer_batches, dev_data=dev, test_data=test, args=args, embeddings=embeddings, results_lock=results_lock)
             elif args.domain_adaptation:
                 train_2 = myio.create_discriminator_batches(ids_corpus, ids_android_corpus, (len(train) / args.batch_size + 1))
@@ -166,11 +170,13 @@ if __name__ == '__main__':
     # data
     parser.add_argument('--embeddings_path', type=str, default='../../askubuntu/vector/vectors_pruned.200.txt.gz', help='path for word embeddings')
     parser.add_argument('--cased', action='store_true', default=False, help="use cased glove embeddings")
+    parser.add_argument('--pad_max', action='store_true', default=False, help="pad all sequences to max length of 100")
     # model
     parser.add_argument('--model_name', nargs="?", type=str, default='cnn3', choices=['dan', 'cnn2', 'cnn3', 'cnn4', 'lstm_bi', 'lstm_bi_fc', 'lstm3', 'tfidf'], help="Encoder model type [dan, cnn2, cnn3, cnn4, lstm_bi, lstm_bi_fc, lstm3]")
     parser.add_argument('--model_name_2', nargs="?", type=str, default='ffn', choices=['ffn'], help="Discriminator model type")
+    parser.add_argument('--simple_discriminator', action='store_true', default=False, help="use simple linear discriminator")
     parser.add_argument('--num_hidden', type=int, default=512, help="encoding size.")
-    parser.add_argument('--num_hidden_transformer', type=int, default=100, help="encoding size.")
+    parser.add_argument('--num_hidden_transformer', type=int, default=200, help="encoding size.")
     parser.add_argument('--num_hidden_discriminator', type=int, default=200, help="encoding size.")
     parser.add_argument('--dropout', type=float, default=0.0, help="dropout parameter")
     parser.add_argument('--dropout_d', type=float, default=0.0, help="dropout parameter for discriminator")
