@@ -115,8 +115,8 @@ def train_gan(transformer, discriminator, encoder, transformer_batches, discrimi
         transformer.cuda()
         discriminator.cuda()
         encoder.cuda()
-    ones = torch.ones(discriminator_batches[0].size()[0])
-    zeros = torch.zeros(discriminator_batches[0].size()[0])
+    ones = torch.ones(discriminator_batches[0][0].size()[0])
+    zeros = torch.zeros(discriminator_batches[0][0].size()[0])
     optimizer_d = torch.optim.Adam(discriminator.parameters(), lr=args.lr_d)
     parameters_t = ifilter(lambda p: p.requires_grad, transformer.parameters())
     optimizer_t = torch.optim.Adam(parameters_t, lr=args.lr_t)
@@ -137,8 +137,8 @@ def train_gan(transformer, discriminator, encoder, transformer_batches, discrimi
         for num_batch in xrange(len(transformer_batches)):
             print("ADVERSERIAL BATCH #{} of {}".format(num_batch, len(transformer_batches)))
             # k Discriminator batches
-            for num_batch_d in xrange(args.k):
-                data = discriminator_batches[(num_batch * args.k) + num_batch_d]
+            for num_batch_d in xrange(args.dk):
+                data = discriminator_batches[(num_batch * args.dk) + num_batch_d]
                 titles_s, bodies_s, titles_t, bodies_t = [autograd.Variable(x) for x in data]
                 if args.cuda:
                     titles_s, bodies_s, titles_t, bodies_t = [x.cuda() for x in (titles_s, bodies_s, titles_t, bodies_t)]

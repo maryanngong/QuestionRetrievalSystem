@@ -244,6 +244,7 @@ def read_annotations_android(path):
     return pid_to_qids
 
 def create_batches(ids_corpus, data, batch_size, padding_id, perm=None, pad_left=False):
+    print("Creating semi-supervised source corpus batches...")
     if perm is None:
         perm = range(len(data))
         random.shuffle(perm)
@@ -255,7 +256,7 @@ def create_batches(ids_corpus, data, batch_size, padding_id, perm=None, pad_left
     bodies = [ ]
     triples = [ ]
     batches = [ ]
-    for u in xrange(N):
+    for u in tqdm(xrange(N)):
         i = perm[u]
         pid, qids, qlabels = data[i]
         if pid not in ids_corpus: continue
@@ -284,8 +285,9 @@ def create_batches(ids_corpus, data, batch_size, padding_id, perm=None, pad_left
     return batches
 
 def create_discriminator_batches(ids_ubuntu_corpus, ids_android_corpus, num_batches, padding_id=0, pad_left=False, num_samples_per=20, should_perm=True):
+    print("Creating random sample batches from source and target...")
     batches = []
-    for i in xrange(num_batches):
+    for i in tqdm(xrange(num_batches)):
         titles = []
         bodies = []
         labels = []
@@ -317,8 +319,9 @@ def create_discriminator_batches(ids_ubuntu_corpus, ids_android_corpus, num_batc
     return batches
 
 def create_eval_batches(ids_corpus, data, padding_id, pad_left):
+    print("Creating evaluation batches...")
     lst = [ ]
-    for pid, qids, qlabels in data:
+    for pid, qids, qlabels in tqdm(data):
         titles = [ ]
         bodies = [ ]
         for id in [pid]+qids:
@@ -349,9 +352,10 @@ def create_tfidf_batches(raw_corpus, data):
 #   - pos_data : dictionary mapping query id to set of positive query ids
 #   - neg_data: dictionary mapping query id to set of negative query ids
 def create_eval_batches_android(ids_corpus, pos_data, neg_data, padding_id=0, pad_left=False):
+    print("Creating evaluation batches...")
     all_pids = set(pos_data.keys() + neg_data.keys())
     lst = []
-    for pid in all_pids:
+    for pid in tqdm(all_pids):
         t, b = ids_corpus[pid]
         titles = [t]
         bodies = [b]
