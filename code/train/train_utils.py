@@ -54,13 +54,13 @@ def mask(x, ids, padding_id=0, cuda=True):
     masked_x = x*mask
     return masked_x
 
-def evaluate(model_data=None, model=None, args=None, vectorizer=None, vectorizer_data=None, embeddings=None):
+def evaluate(model_data=None, model=None, args=None, vectorizer=None, vectorizer_data=None, embedding_model=None):
     results = []
     meter = AUCMeter()
     if model is not None:
         model.eval()
         print("Computing Model Evaluation Metrics...")
-        results = compute_model_rankings(model_data, model, args, meter, embeddings)
+        results = compute_model_rankings(model_data, model, args, meter, embedding_model)
     if vectorizer is not None:
         if vectorizer_data is None:
             print("No vectorizer compatible data. Aborting...")
@@ -75,15 +75,15 @@ def evaluate(model_data=None, model=None, args=None, vectorizer=None, vectorizer
     auc5 = meter.value(max_fpr=0.05)
     return MAP, MRR, P1, P5, auc5
 
-def compute_model_rankings(data, model, args, meter, embeddings=None):
+def compute_model_rankings(data, model, args, meter, embedding_model=None):
     res = []
     for idts, idbs, labels in tqdm(data):
         titles, bodies = autograd.Variable(idts), autograd.Variable(idbs)
         if args.cuda:
             titles, bodies = titles.cuda(), bodies.cuda()
-        if embeddings is not None:
-            titles = embed(titles, embeddings, args.cuda)
-            bodies = embed(bodies, embeddings, args.cuda)
+        if embedding_model is not None:
+            titles = embedding_model(titles)
+            bodies = embedding_model(bodies)
         encode_titles = model(titles)
         encode_bodies = model(bodies)
 
@@ -122,7 +122,7 @@ def compute_tfidf_rankings(data, vectorizer, meter):
         res.append(ranked_labels)
     return res
 
-def embed(x, embeddings, cuda):
+def get_embedding_model(embeddings, cuda):
     vocab_size, embed_dim = embeddings.shape
     embedding_layer = nn.Embedding(vocab_size, embed_dim)
     embedding_layer.weight.data = torch.from_numpy(embeddings)
@@ -130,9 +130,10 @@ def embed(x, embeddings, cuda):
     embedding_model = nn.Sequential(embedding_layer)
     if cuda:
         embedding_model = embedding_model.cuda()
-    return embedding_model(x)
+    return embedding_model
 
 def train_gan(transformer, discriminator, encoder, transformer_batches, discriminator_batches, encoder_batches, dev_data, test_data, args, embeddings, results_lock=None):
+    embedding_model = get_embedding_model(embeddings, args.cuda)
     ones = autograd.Variable(torch.ones(discriminator_batches[0][0].size()[0]), requires_grad=False).unsqueeze(1)
     zeros = autograd.Variable(torch.zeros(discriminator_batches[0][0].size()[0]), requires_grad=False).unsqueeze(1)
     if args.cuda:
@@ -178,8 +179,8 @@ def train_gan(transformer, discriminator, encoder, transformer_batches, discrimi
                     titles_s, bodies_s, titles_t, bodies_t = [x.cuda() for x in (titles_s, bodies_s, titles_t, bodies_t)]
                 # TODO test if changing variable names matters
                 # Train on real target data
-                embedded_titles_t = embed(titles_t, embeddings, args.cuda)
-                embedded_bodies_t = embed(bodies_t, embeddings, args.cuda)
+                embedded_titles_t = embedding_model(titles_t)
+                embedded_bodies_t = embedding_model(bodies_t)
                 is_target_titles_t = discriminator(embedded_titles_t)
                 is_target_bodies_t = discriminator(embedded_bodies_t)
                 loss_real = F.binary_cross_entropy_with_logits(is_target_titles_t, ones) + F.binary_cross_entropy_with_logits(is_target_bodies_t, ones)
@@ -242,10 +243,10 @@ def train_gan(transformer, discriminator, encoder, transformer_batches, discrimi
         # Evaluation
         encoder.eval()
         print("Dev data performance")
-        _, _, _, _, AUC05_dev = evaluate(model_data=dev_data, model=encoder, args=args, embeddings=embeddings)
+        _, _, _, _, AUC05_dev = evaluate(model_data=dev_data, model=encoder, args=args, embedding_model=embedding_model)
         print(tabulate([[AUC05_dev]], headers=['AUC_0.5']))
         print("\nTest data performance")
-        _, _, _, _, AUC05_test = evaluate(model_data=test_data, model=encoder, args=args, embeddings=embeddings)
+        _, _, _, _, AUC05_test = evaluate(model_data=test_data, model=encoder, args=args, embedding_model=embedding_model)
         print(tabulate([[AUC05_test]], headers=['AUC_0.5']))
         if AUC05_dev > best_AUC05_dev:
             best_AUC05_dev = AUC05_dev

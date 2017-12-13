@@ -135,13 +135,14 @@ def main(args, results_lock=None):
                 train_utils.train_model(model, train, dev, test, ids_corpus, args.batch_size, args)
 
         else:
+            embedding_model = train_utils.get_embedding_model(embeddings, args.cuda)
             print("Evaluating performance on dev data...")
-            MAP, MRR, P1, P5, auc5 = train_utils.evaluate(model_data=dev, model=model, args=args)
+            MAP, MRR, P1, P5, auc5 = train_utils.evaluate(model_data=dev, model=model, args=args, embedding_model=embedding_model)
             print(tabulate([[MAP, MRR, P1, P5, auc5]], headers=['MAP', 'MRR', 'P@1', 'P@5', 'AUC0.05']))
 
             print()
             print("Evaluating performance on test data...")
-            MAP, MRR, P1, P5, auc5 = train_utils.evaluate(model_data=test, model=model, args=args)
+            MAP, MRR, P1, P5, auc5 = train_utils.evaluate(model_data=test, model=model, args=args, embedding_model=embedding_model)
             print(tabulate([[MAP, MRR, P1, P5, auc5]], headers=['MAP', 'MRR', 'P@1', 'P@5', 'AUC0.05']))
 
 def try_random_params(args, gpu, results_lock):
