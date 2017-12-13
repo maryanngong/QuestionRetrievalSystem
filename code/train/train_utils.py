@@ -81,7 +81,7 @@ def compute_model_rankings(data, model, args, meter, embeddings=None):
         titles, bodies = autograd.Variable(idts), autograd.Variable(idbs)
         if args.cuda:
             titles, bodies = titles.cuda(), bodies.cuda()
-        if embeddings:
+        if embeddings is not None:
             titles = embed(titles, embeddings, args.cuda)
             bodies = embed(bodies, embeddings, args.cuda)
         encode_titles = model(titles)
