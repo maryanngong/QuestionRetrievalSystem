@@ -45,13 +45,22 @@ def average_without_padding_cnn(x, ids, eps=1e-8, padding_id=0, cuda=True):
     s = torch.sum(x*mask, 2) / (torch.sum(mask, 2)+eps)
     return s
 
-def evaluate(model_data=None, model=None, args=None, vectorizer=None, vectorizer_data=None):
+def mask(x, ids, padding_id=0, cuda=True):
+    mask = ids != padding_id
+    mask = mask.type(torch.FloatTensor)
+    mask = autograd.Variable(mask.unsqueeze(2), requires_grad=False)
+    if cuda:
+        mask = mask.cuda()
+    masked_x = x*mask
+    return masked_x
+
+def evaluate(model_data=None, model=None, args=None, vectorizer=None, vectorizer_data=None, embeddings=None):
     results = []
     meter = AUCMeter()
     if model is not None:
         model.eval()
         print("Computing Model Evaluation Metrics...")
-        results = compute_model_rankings(model_data, model, args, meter)
+        results = compute_model_rankings(model_data, model, args, meter, embeddings)
     if vectorizer is not None:
         if vectorizer_data is None:
             print("No vectorizer compatible data. Aborting...")
@@ -66,12 +75,15 @@ def evaluate(model_data=None, model=None, args=None, vectorizer=None, vectorizer
     auc5 = meter.value(max_fpr=0.05)
     return MAP, MRR, P1, P5, auc5
 
-def compute_model_rankings(data, model, args, meter):
+def compute_model_rankings(data, model, args, meter, embeddings=None):
     res = []
     for idts, idbs, labels in tqdm(data):
         titles, bodies = autograd.Variable(idts), autograd.Variable(idbs)
         if args.cuda:
             titles, bodies = titles.cuda(), bodies.cuda()
+        if embeddings:
+            titles = embed(titles, embeddings, args.cuda)
+            bodies = embed(bodies, embeddings, args.cuda)
         encode_titles = model(titles)
         encode_bodies = model(bodies)
 
@@ -172,8 +184,8 @@ def train_gan(transformer, discriminator, encoder, transformer_batches, discrimi
                 is_target_bodies_t = discriminator(embedded_bodies_t)
                 loss_real = F.binary_cross_entropy_with_logits(is_target_titles_t, ones) + F.binary_cross_entropy_with_logits(is_target_bodies_t, ones)
                 # Train on fake (transformed source) data
-                is_target_titles_s = discriminator(transformer(titles_s))
-                is_target_bodies_s = discriminator(transformer(bodies_s))
+                is_target_titles_s = discriminator(mask(transformer(titles_s), titles_s.cpu().data, cuda=args.cuda))
+                is_target_bodies_s = discriminator(mask(transformer(bodies_s), bodies_s.cpu().data, cuda=args.cuda))
                 loss_fake = F.binary_cross_entropy_with_logits(is_target_titles_s, zeros) + F.binary_cross_entropy_with_logits(is_target_bodies_s, zeros)
                 # Compute gradients and backprop
                 total_discriminator_loss = loss_real + loss_fake
@@ -195,8 +207,8 @@ def train_gan(transformer, discriminator, encoder, transformer_batches, discrimi
             titles_s, bodies_s, _, _ = [autograd.Variable(x) for x in data]
             if args.cuda:
                 titles_s, bodies_s = [x.cuda() for x in (titles_s, bodies_s)]
-            is_target_titles = discriminator(transformer(titles_s))
-            is_target_bodies = discriminator(transformer(bodies_s))
+            is_target_titles = discriminator(mask(transformer(titles_s), titles_s.cpu().data, cuda=args.cuda))
+            is_target_bodies = discriminator(mask(transformer(bodies_s), bodies_s.cpu().data, cuda=args.cuda))
             total_transformer_loss = F.binary_cross_entropy_with_logits(is_target_titles, ones) + F.binary_cross_entropy_with_logits(is_target_bodies, ones)
             if args.wgan:
                 total_transformer_loss = -(torch.mean(is_target_titles)) - (torch.mean(is_target_bodies))
@@ -214,8 +226,8 @@ def train_gan(transformer, discriminator, encoder, transformer_batches, discrimi
             titles_s, bodies_s = [autograd.Variable(x) for x in (titles_s, bodies_s)]
             if args.cuda:
                 titles_s, bodies_s = [x.cuda() for x in (titles_s, bodies_s)]
-            encoded_titles = encoder(transformer(titles_s))
-            encoded_bodies = encoder(transformer(bodies_s))
+            encoded_titles = encoder(mask(transformer(titles_s), titles_s.cpu().data, cuda=args.cuda))
+            encoded_bodies = encoder(mask(transformer(bodies_s), bodies_s.cpu().data, cuda=args.cuda))
             avg_encoded_titles = average_without_padding_cnn(encoded_titles, titles_s.cpu().data, cuda=args.cuda)
             avg_encoded_bodies = average_without_padding_cnn(encoded_bodies, bodies_s.cpu().data, cuda=args.cuda)
             avg_encoded_text = (avg_encoded_titles + avg_encoded_bodies) * 0.5
@@ -230,10 +242,10 @@ def train_gan(transformer, discriminator, encoder, transformer_batches, discrimi
         # Evaluation
         encoder.eval()
         print("Dev data performance")
-        _, _, _, _, AUC05_dev = evaluate(model_data=dev_data, model=encoder, args=args)
+        _, _, _, _, AUC05_dev = evaluate(model_data=dev_data, model=encoder, args=args, embeddings=embeddings)
         print(tabulate([[AUC05_dev]], headers=['AUC_0.5']))
         print("\nTest data performance")
-        _, _, _, _, AUC05_test = evaluate(model_data=test_data, model=encoder, args=args)
+        _, _, _, _, AUC05_test = evaluate(model_data=test_data, model=encoder, args=args, embeddings=embeddings)
         print(tabulate([[AUC05_test]], headers=['AUC_0.5']))
         if AUC05_dev > best_AUC05_dev:
             best_AUC05_dev = AUC05_dev
