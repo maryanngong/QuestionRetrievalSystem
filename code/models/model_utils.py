@@ -88,6 +88,7 @@ class Discriminator(nn.Module):
         batch_size = x.size()[0]
         h0, c0 = self.init_hidden_states(batch_size)
         _, (h_n, c_n) = self.rnn(x, (h0, c0))
+        h_n = h_n.view(-1, args.num_hidden_discriminator)
         out = self.fc1(h_n)
         return out
 

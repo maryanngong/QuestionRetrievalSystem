@@ -4,6 +4,7 @@ import torch
 import torch.autograd as autograd
 import torch.nn.functional as F
 import torch.utils.data as data
+import torch.nn as nn
 from tqdm import tqdm
 from tabulate import tabulate
 import datetime
