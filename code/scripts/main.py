@@ -72,7 +72,7 @@ def main(args, results_lock=None):
             if args.gan_training:
                 transformer = model_utils.get_model(embeddings, args, 'transformer')
                 discriminator = model_utils.get_model(embeddings, args, 'discriminator')
-                encoder = model
+                encoder = model_utils.get_model(embeddings, args, 'encoder')
             elif args.domain_adaptation:
                 model_2 = model_utils.get_model(None, args, args.model_name_2)
         else :
@@ -84,9 +84,11 @@ def main(args, results_lock=None):
                 # TODO add snapshot support for GAN training
             except :
                 print("Sorry, This snapshot doesn't exist."); exit()
-        print("Encoder Model:")
+        print("Model:")
         print(model)
         if args.gan_training:
+            print("Encoder Model:")
+            print(encoder)
             print("Transformer Model:")
             print(transformer)
             print("Discriminator Model:")

@@ -19,7 +19,7 @@ def get_model(embeddings, args, model_name):
     elif model_name == 'transformer':
         return Transformer(embeddings, args)
     elif model_name == 'encoder':
-        return CNN3(embeddings, args)
+        return Encoder(embeddings, args)
     elif model_name == 'ffn':
         return FFN(args)
     elif model_name == 'ffn2':
@@ -90,6 +90,22 @@ class Discriminator(nn.Module):
         _, (h_n, c_n) = self.rnn(x, (h0, c0))
         h_n = h_n.view(-1, self.args.num_hidden_discriminator)
         out = self.fc1(h_n)
+        return out
+
+
+class Encoder(nn.Module):
+
+    def __init__(self, embeddings, args):
+        super(Encoder, self).__init__()
+        self.args = args
+        _, embed_dim = embeddings.shape
+        self.conv1 = nn.Conv1d(embed_dim, args.num_hidden, kernel_size=3)
+
+    def forward(self, x_indx):
+        # reorder dimensions for convolutional layer
+        x = x.permute(0,2,1)
+        x = F.dropout(x, p=self.args.dropout, training=self.training)
+        out = self.conv1(x)
         return out
 
 
