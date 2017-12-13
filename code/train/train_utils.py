@@ -202,10 +202,19 @@ def train_gan(transformer, discriminator, encoder, transformer_batches, discrimi
                     loss_b = (torch.mean(is_target_bodies_t) - torch.mean(is_target_bodies_s))
                     total_discriminator_loss = (loss_t + loss_b) * 0.5
                     if args.grad_penalty:
-                        # TODO finish implementing grad penalty
-                        dist = ((embedded_titles_t-transformed_titles_s)**2).sum(1)**0.5
-                        lipschitz_est = (is_target_titles_t-is_target_titles_s).abs()/(dist+1e-8)
-                        lipschitz_loss = args.gam*((1.0-lipschitz_est)**2).mean(0).view(1)
+                        # print("EMBED")
+                        # print(embedded_titles_t)
+                        dist_titles = ((embedded_titles_t-transformed_titles_s)**2).sum(2)**0.5
+                        dist_bodies = ((embedded_bodies_t-transformed_bodies_s)**2).sum(2)**0.5
+                        # print("DIST")
+                        # print(dist)
+                        lipschitz_est_titles = (is_target_titles_t-is_target_titles_s).abs()/(dist_titles+1e-8)
+                        lipschitz_est_bodies = (is_target_bodies_t-is_target_bodies_s).abs()/(dist_bodies+1e-8)
+                        # print("LIP")
+                        # print(lipschitz_est)
+                        lipschitz_loss_titles = args.gam*((1.0-lipschitz_est_titles)**2).mean(0).mean(0).view(1)
+                        lipschitz_loss_bodies = args.gam*((1.0-lipschitz_est_bodies)**2).mean(0).mean(0).view(1)
+                        lipschitz_loss = (lipschitz_loss_titles + lipschitz_loss_bodies) * 0.5
                         total_discriminator_loss += lipschitz_loss
                 losses_d.append(total_discriminator_loss.cpu().data[0])
                 optimizer_d.zero_grad()
