@@ -12,6 +12,7 @@ from zipfile import ZipFile
 from tqdm import tqdm
 import cPickle as pickle
 from tabulate import tabulate
+from multiprocessing import Pool
 
 
 def say(s, stream=sys.stdout):
@@ -285,7 +286,6 @@ def create_batches(ids_corpus, data, batch_size, padding_id, perm=None, pad_left
     return batches
 
 def create_discriminator_batches(ids_ubuntu_corpus, ids_android_corpus, num_batches, padding_id=0, pad_left=False, num_samples_per=20, should_perm=True):
-    print("Creating random sample batches from source and target...")
     batches = []
     for i in tqdm(xrange(num_batches)):
         titles = []
@@ -316,6 +316,18 @@ def create_discriminator_batches(ids_ubuntu_corpus, ids_android_corpus, num_batc
             batches.append((titles, bodies, labels))
         else:
             batches.append((titles[:num_samples_per], bodies[:num_samples_per], titles[num_samples_per:], bodies[num_samples_per:]))
+    return batches
+
+def f(x):
+    return create_discriminator_batches(*x)
+
+def create_discriminator_batches_parallel(ids_ubuntu_corpus, ids_android_corpus, num_batches, padding_id=0, pad_left=False, num_samples_per=20, should_perm=True):
+    print("Creating random sample batches from source and target...")
+    batches = []
+    num_workers = 4
+    pool = Pool(processes=num_workers)
+    batches_sections = pool.map(f, [(ids_ubuntu_corpus, ids_android_corpus, num_batches / num_workers, padding_id, pad_left, num_samples_per, should_perm) for i in xrange(num_workers)])
+    batches = reduce(lambda x, y: x + y, batches_sections)
     return batches
 
 def create_eval_batches(ids_corpus, data, padding_id, pad_left):
