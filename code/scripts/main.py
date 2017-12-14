@@ -177,7 +177,7 @@ if __name__ == '__main__':
     parser.add_argument('--epochs', type=int, default=20, help='number of epochs for train [default: 256]')
     parser.add_argument('--batch_size', type=int, default=32, help='batch size for training [default: 64]')
     parser.add_argument('-k', '--dk', type=int, default=5, help='number of discriminator batches per transformer batch')
-    parser.add_argument('--lam', type=float, default=0.0001, help='constant multiplier on loss 2 in domain adaptation')
+    parser.add_argument('--lam', type=float, default=0.001, help='constant multiplier on loss 2 in domain adaptation')
     parser.add_argument('--gam', type=float, default=0.1, help='constant multiplier on loss 2 in domain adaptation')
     # data
     parser.add_argument('--embeddings_path', type=str, default='../../askubuntu/vector/vectors_pruned.200.txt.gz', help='path for word embeddings')
