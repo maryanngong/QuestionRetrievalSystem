@@ -14,7 +14,7 @@ import score_utils as score_utils
 import evaluation_utils as eval_utils
 from itertools import ifilter
 from evaluation import Evaluation
-import data.myio as myio
+import data.data_utils as data_utils
 from meter import AUCMeter
 from sklearn.metrics import accuracy_score
 
@@ -303,11 +303,11 @@ def train_gan(transformer, discriminator, encoder, transformer_batches, discrimi
     if results_lock:
         results_lock.acquire()
         try:
-            myio.record_best_results(args.results_path, args.save_path+"_args_"+serialize_model_name(args), [best_AUC05_dev], [best_AUC05_test], best_epoch)
+            data_utils.record_best_results(args.results_path, args.save_path+"_args_"+serialize_model_name(args), [best_AUC05_dev], [best_AUC05_test], best_epoch)
         finally:
             results_lock.release()
     else:
-        myio.record_best_results(args.results_path, args.save_path+"_args_"+serialize_model_name(args), [best_AUC05_dev], [best_AUC05_test], best_epoch)
+        data_utils.record_best_results(args.results_path, args.save_path+"_args_"+serialize_model_name(args), [best_AUC05_dev], [best_AUC05_test], best_epoch)
 
 
 def train_model(model, train, dev_data, test_data, ids_corpus, batch_size, args, model_2=None, train_batches_2=None, results_lock=None):
@@ -338,7 +338,7 @@ def train_model(model, train, dev_data, test_data, ids_corpus, batch_size, args,
     for epoch in range(1, args.epochs+1):
         print("-------------\nEpoch {}:\n".format(epoch))
         # randomize new dataset each time
-        train_batches = myio.create_batches(ids_corpus, train, batch_size, 0, pad_left=False)
+        train_batches = data_utils.create_batches(ids_corpus, train, batch_size, 0, pad_left=False)
 
         N =len(train_batches)
         losses = []
@@ -459,11 +459,11 @@ def train_model(model, train, dev_data, test_data, ids_corpus, batch_size, args,
     if results_lock:
         results_lock.acquire()
         try:
-            myio.record_best_results(args.results_path, args.save_path+"_args_"+serialize_model_name(args), best_metrics_dev, best_metrics_test, best_epoch)
+            data_utils.record_best_results(args.results_path, args.save_path+"_args_"+serialize_model_name(args), best_metrics_dev, best_metrics_test, best_epoch)
         finally:
             results_lock.release()
     else:
-        myio.record_best_results(args.results_path, args.save_path+"_args_"+serialize_model_name(args), best_metrics_dev, best_metrics_test, best_epoch)
+        data_utils.record_best_results(args.results_path, args.save_path+"_args_"+serialize_model_name(args), best_metrics_dev, best_metrics_test, best_epoch)
 
 # same as compile_rankings function except it already has positive and negative labels passed as qlabels
 # also only handles one minibatch

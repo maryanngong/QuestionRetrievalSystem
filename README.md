@@ -4,12 +4,13 @@
 ## Description
 This github repo implements the final project for MIT's 6.864 Advanced Natural Language Processing, as taught in
 Fall 2017 by Professor Regina Barzilay. You can read the full description and results in `project_report.pdf`.
+**Credits:** Our initial project structure comes from Adam Yala's helpful [example project](https://github.com/yala/pytorch-example) and our data processing structure is based on code from Tao Lei's [rcnn implementation](https://github.com/taolei87/rcnn)
 
 ## Project Structure
 - `Android` Android Corpus Data (git submodule)
 - `AskUbuntu` Ubuntu Corpus Data (git submodule)
 - `code` All project code
-    - `data` Includes data processing utils in `myio.py`, embeddings, and temporary data storage
+    - `data` Includes data processing utils in `data_utils.py`, embeddings, and temporary data storage
     - `models`: All models are defined in `model_utils.py`
     - `train`: `train_utils.py` includes the training procedure and helper functions such as the evaluation procedure.
     - `scripts`: Includes the main entry point `main.py`
@@ -29,7 +30,7 @@ If you are going to run models in the domain adaptation setting, please download
 directory and run:
 ```
 cd code/data
-python myio.py
+python data_utils.py
 ```
 To safely run our models, and ensure they have access to everything in the data directory please `cd` to `code/data`.
 Then you can run the program via:
